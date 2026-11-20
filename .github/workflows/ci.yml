@@ -18,3 +18,4 @@ jobs:
       - run: cargo clippy --all-targets -- -D warnings
       - run: cargo test
       - run: cargo run -p rtt-cli -- check examples/sigilli
+      - run: cargo run -p rtt-cli -- build examples/sigilli --out target/sigilli --ppi 72

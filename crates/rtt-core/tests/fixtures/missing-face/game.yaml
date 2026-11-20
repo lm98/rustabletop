@@ -1,0 +1,12 @@
+game: fixture
+components:
+  - id: token-card
+    kind: card
+    size: mini-euro
+    schema:
+      properties:
+        art: { type: string, format: asset }
+    faces:
+      front: face.typ
+      back: face.typ
+    data: data/cards.yaml

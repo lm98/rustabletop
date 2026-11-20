@@ -1,16 +1,22 @@
 #![allow(clippy::result_large_err)]
 
+mod build;
 mod diagnostics;
+mod impose;
 mod project;
 mod schema;
 mod source;
+mod template;
 mod units;
 mod world;
 
+pub use build::{BuildOptions, Built, Plan, build};
 pub use diagnostics::{Diagnostic, Location, Severity, Subject};
-pub use project::{Checked, Component, Faces, Instance, Kind, MANIFEST_FILE, Project, check};
+pub use project::{
+    Checked, Component, Duplex, Faces, Instance, Kind, MANIFEST_FILE, Paper, Print, Project, check,
+};
 pub use units::{Length, SIZE_PRESETS, Size};
-pub use world::ProjectWorld;
+pub use world::{ProjectWorld, STD_PACKAGE};
 
 use typst_layout::PagedDocument;
 use typst_pdf::PdfOptions;

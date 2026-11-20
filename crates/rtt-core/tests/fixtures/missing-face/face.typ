@@ -1,0 +1,1 @@
+#let front(card, ctx) = []
