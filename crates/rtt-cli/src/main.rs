@@ -21,6 +21,8 @@ struct Cli {
 enum Command {
     /// Validate a project's manifest, schemas and data
     Check(CheckArgs),
+    /// Check, then render the print-and-play PDF and one PNG per card face
+    Build(BuildArgs),
     /// Compile a raw Typst file (low-level, used by spikes)
     Render(RenderArgs),
 }
@@ -31,6 +33,19 @@ struct CheckArgs {
     project: PathBuf,
     #[arg(long)]
     json: bool,
+}
+
+#[derive(clap::Args)]
+struct BuildArgs {
+    #[arg(default_value = ".")]
+    project: PathBuf,
+    #[arg(long)]
+    json: bool,
+    /// Output directory [default: <PROJECT>/out]
+    #[arg(long, short)]
+    out: Option<PathBuf>,
+    #[arg(long, default_value_t = 300.0)]
+    ppi: f32,
 }
 
 #[derive(Clone, Copy, ValueEnum)]
@@ -68,6 +83,7 @@ fn main() -> ExitCode {
     let cli = Cli::parse();
     match cli.command {
         Command::Check(args) => check(&args),
+        Command::Build(args) => build(&args),
         Command::Render(args) => match render(&args) {
             Ok(report) => {
                 emit(&report, args.json);
@@ -155,6 +171,46 @@ fn check(args: &CheckArgs) -> ExitCode {
         }
     }
     if ok {
+        ExitCode::SUCCESS
+    } else {
+        ExitCode::FAILURE
+    }
+}
+
+fn build(args: &BuildArgs) -> ExitCode {
+    let out = args.out.clone().unwrap_or_else(|| args.project.join("out"));
+    let options = rtt_core::BuildOptions { out, ppi: args.ppi };
+    let built = match rtt_core::build(&args.project, &options) {
+        Ok(built) => built,
+        Err(e) => {
+            eprintln!("error: {e:#}");
+            return ExitCode::from(2);
+        }
+    };
+    if args.json {
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&built).expect("report is serializable")
+        );
+    } else {
+        for d in &built.diagnostics {
+            eprintln!("{d}\n");
+        }
+        let errors = built.diagnostics.iter().filter(|d| d.is_error()).count();
+        let warnings = built.diagnostics.len() - errors;
+        if built.ok {
+            if let Some(pdf) = built.artifacts.first() {
+                println!("{pdf}");
+            }
+            println!(
+                "ok: {} artifact(s), {warnings} warning(s)",
+                built.artifacts.len()
+            );
+        } else {
+            println!("failed: {errors} error(s), {warnings} warning(s)");
+        }
+    }
+    if built.ok {
         ExitCode::SUCCESS
     } else {
         ExitCode::FAILURE

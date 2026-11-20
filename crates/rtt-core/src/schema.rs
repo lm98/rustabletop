@@ -83,6 +83,42 @@ const KEYWORDS: &[&str] = &[
     "allOf",
     "not",
 ];
+pub const FORMATS: &[&str] = &["rich-text", "asset"];
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Format {
+    RichText,
+    Asset,
+}
+
+impl Format {
+    fn parse(name: &str) -> Option<Self> {
+        match name {
+            "rich-text" => Some(Self::RichText),
+            "asset" => Some(Self::Asset),
+            _ => None,
+        }
+    }
+}
+
+pub fn formatted_fields(schema: &Value) -> Vec<(String, Format)> {
+    let format_of = |node: &Value| {
+        node.get("format")
+            .and_then(Value::as_str)
+            .and_then(Format::parse)
+    };
+    schema
+        .get("properties")
+        .and_then(Value::as_object)
+        .into_iter()
+        .flatten()
+        .filter_map(|(name, prop)| {
+            let format = format_of(prop).or_else(|| prop.get("items").and_then(format_of))?;
+            Some((name.clone(), format))
+        })
+        .collect()
+}
+
 const TYPES: &[&str] = &[
     "string", "integer", "number", "boolean", "array", "object", "null",
 ];
@@ -148,6 +184,24 @@ fn lint_node(node: &Value, pointer: String, issues: &mut Vec<SchemaIssue>) {
                     }
                 }
             }
+            "format" => match value.as_str() {
+                Some(f) if FORMATS.contains(&f) => {}
+                other => {
+                    let formats: Vec<String> = FORMATS.iter().map(|f| (*f).to_owned()).collect();
+                    issues.push(SchemaIssue {
+                        pointer: here,
+                        message: match other {
+                            Some(f) => format!("unknown format `{f}`"),
+                            None => "`format` must be a string".into(),
+                        },
+                        hints: other
+                            .and_then(|f| suggest(f, &formats))
+                            .into_iter()
+                            .chain([format!("formats: {}", FORMATS.join(", "))])
+                            .collect(),
+                    });
+                }
+            },
             "properties" => {
                 if let Value::Object(props) = value {
                     for (name, sub) in props {
@@ -354,6 +408,32 @@ mod tests {
             ]
         );
         assert_eq!(issues[1].hints, ["did you mean `enum`?"]);
+    }
+
+    #[test]
+    fn lint_rejects_unknown_formats() {
+        let issues = lint(&json!({ "properties": { "text": { "format": "rich-txt" } } }));
+        assert_eq!(issues.len(), 1);
+        assert_eq!(issues[0].hints[0], "did you mean `rich-text`?");
+        assert!(lint(&json!({ "properties": { "art": { "format": "asset" } } })).is_empty());
+    }
+
+    #[test]
+    fn finds_formatted_fields() {
+        let schema = json!({ "properties": {
+            "text": { "type": "string", "format": "rich-text" },
+            "art": { "type": "array", "items": { "format": "asset" } },
+            "name": { "type": "string" }
+        }});
+        let mut fields = formatted_fields(&schema);
+        fields.sort_by(|a, b| a.0.cmp(&b.0));
+        assert_eq!(
+            fields,
+            [
+                ("art".to_owned(), Format::Asset),
+                ("text".to_owned(), Format::RichText)
+            ]
+        );
     }
 
     #[test]

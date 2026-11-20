@@ -1,5 +1,17 @@
 game: sigilli
 
+icons:
+  fuoco: icons/fuoco.svg
+  acqua: icons/acqua.svg
+  terra: icons/terra.svg
+  aria: icons/aria.svg
+
+print:
+  paper: a4
+  margin: 5mm
+  crop-marks: true
+  duplex: long-edge
+
 components:
   - id: unit-card
     kind: card
@@ -11,9 +23,10 @@ components:
         name: { type: string, maxLength: 28 }
         suit: { enum: [fuoco, acqua, terra, aria] }
         cost: { type: integer, minimum: 0, maximum: 9 }
-        text: { type: string }
+        text: { type: string, format: rich-text }
         flavor: { type: string, maxLength: 80 }
+        art: { type: string, format: asset }
     faces:
-      front: templates/front.typ
-      back: templates/back.typ
+      front: templates/card.typ
+      back: templates/card.typ
     data: data/units.yaml
