@@ -1,0 +1,20 @@
+[workspace]
+resolver = "3"
+members = ["crates/rtt-core", "crates/rtt-cli"]
+
+[workspace.package]
+version = "0.0.1"
+edition = "2024"
+license = "MIT OR Apache-2.0"
+
+[workspace.dependencies]
+typst = "=0.15.1"
+typst-pdf = "=0.15.1"
+typst-render = "=0.15.1"
+typst-layout = "=0.15.1"
+typst-assets = { version = "0.15", features = ["fonts"] }
+anyhow = "1"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+clap = { version = "4", features = ["derive"] }
+rtt-core = { path = "crates/rtt-core" }

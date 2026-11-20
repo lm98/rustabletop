@@ -1,0 +1,15 @@
+[package]
+name = "rtt-core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+typst.workspace = true
+typst-pdf.workspace = true
+typst-render.workspace = true
+typst-layout.workspace = true
+typst-assets.workspace = true
+anyhow.workspace = true
+serde.workspace = true
+serde_json.workspace = true

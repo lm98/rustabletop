@@ -1,0 +1,11 @@
+id,name,suit,cost,qty,text,flavor
+ember-adept,Adepta della Brace,fuoco,1,3,"Quando entra: infliggi 1 danno. :fuoco:","Ogni scintilla ricorda il primo incendio."
+pyre-warden,Custode del Rogo,fuoco,3,2,"Le tue carte :fuoco: costano 1 in meno.",
+ash-titan,Titano di Cenere,fuoco,6,1,"Travolgere. Quando muore: ogni giocatore scarta una carta :fuoco: o perde 2 vita. Se nessuno scarta, pesca due carte e infliggi 3 danni a ogni creatura nemica che non sia :terra:.","Dove cammina non cresce più nulla."
+tide-seer,Veggente delle Maree,acqua,2,3,"Guarda le prime 3 carte del mazzo. Rimettine 1 in fondo.","Il mare restituisce sempre ciò che prende."
+drowned-king,Re Annegato,acqua,5,1,"Quando attacca: ruba un Sigillo :acqua:.",
+stone-sentinel,Sentinella di Pietra,terra,2,3,"Difensore. :terra::terra:",
+root-mother,Madre delle Radici,terra,4,2,"All'inizio del tuo turno: guadagni 1 :terra:.","Le radici ascoltano più di quanto parlino."
+gale-dancer,Danzatrice del Vento,aria,1,3,"Rapidità.",
+storm-herald,Araldo della Tempesta,aria,4,2,"Quando entra: ruota una carta bersaglio. :aria:","Il tuono arriva sempre dopo."
+void-oracle,Oracolo del Vuoto,aria,7,1,"Quando entra: ogni giocatore rivela la mano. Per ogni carta :fuoco: rivelata, infliggi 1 danno al suo proprietario; per ogni carta :acqua:, il suo proprietario pesca una carta; per ogni carta :terra:, guadagna 1 vita; per ogni carta :aria:, ruotala. Poi ogni giocatore rimescola la propria mano nel mazzo e pesca altrettante carte meno una. Se un giocatore non può pescare, perde un Sigillo.",
