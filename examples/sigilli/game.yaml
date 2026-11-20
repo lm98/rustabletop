@@ -1,0 +1,19 @@
+game: sigilli
+
+components:
+  - id: unit-card
+    kind: card
+    size: poker
+    bleed: 3mm
+    schema:
+      required: [name, suit, cost, text]
+      properties:
+        name: { type: string, maxLength: 28 }
+        suit: { enum: [fuoco, acqua, terra, aria] }
+        cost: { type: integer, minimum: 0, maximum: 9 }
+        text: { type: string }
+        flavor: { type: string, maxLength: 80 }
+    faces:
+      front: templates/front.typ
+      back: templates/back.typ
+    data: data/units.yaml

@@ -27,7 +27,10 @@ impl ProjectWorld {
         font_dirs: &[PathBuf],
         inputs: impl IntoIterator<Item = (String, String)>,
     ) -> Result<Self> {
-        let root = root.into().canonicalize().context("project root not found")?;
+        let root = root
+            .into()
+            .canonicalize()
+            .context("project root not found")?;
         let entry = root.join(entry.as_ref());
         let vpath = VirtualPath::virtualize(&root, &entry)
             .map_err(|e| anyhow::anyhow!("entry outside project root: {e:?}"))?;
@@ -58,7 +61,9 @@ impl ProjectWorld {
 
     fn realize(&self, id: FileId) -> FileResult<PathBuf> {
         if !matches!(id.root(), VirtualRoot::Project) {
-            return Err(FileError::Other(Some("packages are not supported yet".into())));
+            return Err(FileError::Other(Some(
+                "packages are not supported yet".into(),
+            )));
         }
         id.vpath()
             .realize(&self.root)
@@ -77,7 +82,10 @@ fn load_fonts(dirs: &[PathBuf]) -> Result<Vec<Font>> {
             .filter_map(|e| e.ok().map(|e| e.path()))
             .filter(|p| {
                 matches!(
-                    p.extension().and_then(|e| e.to_str()).map(str::to_ascii_lowercase).as_deref(),
+                    p.extension()
+                        .and_then(|e| e.to_str())
+                        .map(str::to_ascii_lowercase)
+                        .as_deref(),
                     Some("ttf" | "otf" | "ttc" | "otc")
                 )
             })

@@ -1,0 +1,15 @@
+- id: ember-adept
+  name: Adepta della Brace
+  suit: fuoco
+  cost: 1
+- id: tide-seer
+  suit: acqua
+  cots: 2
+- id: ember-adept
+  name: Doppione
+  suit: fuoco
+  cost: 2
+- id: Bad_Id
+  name: Id non valido
+  suit: aria
+  cost: 1

@@ -1,0 +1,14 @@
+game: fixture
+components:
+  - id: unit-card
+    kind: card
+    size: poker
+    schema:
+      required: [name, suit, cost]
+      properties:
+        name: { type: string }
+        suit: { enum: [fuoco, acqua, terra, aria] }
+        cost: { type: integer, minimum: 0 }
+    faces:
+      front: face.typ
+    data: data/units.csv
