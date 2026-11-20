@@ -7,7 +7,11 @@ use clap::{Parser, Subcommand, ValueEnum};
 use rtt_core::{Diagnostic, ProjectWorld};
 
 #[derive(Parser)]
-#[command(name = "rtt", version, about = "rustabletop — tabletop components from data")]
+#[command(
+    name = "rtt",
+    version,
+    about = "rustabletop — tabletop components from data"
+)]
 struct Cli {
     #[command(subcommand)]
     command: Command,
@@ -15,7 +19,18 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Command {
+    /// Validate a project's manifest, schemas and data
+    Check(CheckArgs),
+    /// Compile a raw Typst file (low-level, used by spikes)
     Render(RenderArgs),
+}
+
+#[derive(clap::Args)]
+struct CheckArgs {
+    #[arg(default_value = ".")]
+    project: PathBuf,
+    #[arg(long)]
+    json: bool,
 }
 
 #[derive(Clone, Copy, ValueEnum)]
@@ -52,16 +67,97 @@ fn parse_key_value(s: &str) -> Result<(String, String), String> {
 fn main() -> ExitCode {
     let cli = Cli::parse();
     match cli.command {
+        Command::Check(args) => check(&args),
         Command::Render(args) => match render(&args) {
             Ok(report) => {
                 emit(&report, args.json);
-                if report.ok { ExitCode::SUCCESS } else { ExitCode::FAILURE }
+                if report.ok {
+                    ExitCode::SUCCESS
+                } else {
+                    ExitCode::FAILURE
+                }
             }
             Err(e) => {
                 eprintln!("error: {e:#}");
                 ExitCode::from(2)
             }
         },
+    }
+}
+
+#[derive(serde::Serialize)]
+struct CheckReport {
+    ok: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    summary: Option<Summary>,
+    diagnostics: Vec<Diagnostic>,
+}
+
+#[derive(serde::Serialize)]
+struct Summary {
+    game: String,
+    components: Vec<ComponentSummary>,
+}
+
+#[derive(serde::Serialize)]
+struct ComponentSummary {
+    id: String,
+    instances: usize,
+    copies: u64,
+}
+
+fn check(args: &CheckArgs) -> ExitCode {
+    let checked = rtt_core::check(&args.project);
+    let ok = checked.ok();
+    let summary = checked.project.as_ref().map(|p| Summary {
+        game: p.game.clone(),
+        components: p
+            .components
+            .iter()
+            .map(|c| ComponentSummary {
+                id: c.id.clone(),
+                instances: c.instances.len(),
+                copies: c.total_qty(),
+            })
+            .collect(),
+    });
+    let report = CheckReport {
+        ok,
+        summary,
+        diagnostics: checked.diagnostics,
+    };
+
+    if args.json {
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&report).expect("report is serializable")
+        );
+    } else {
+        for d in &report.diagnostics {
+            eprintln!("{d}\n");
+        }
+        let errors = report.diagnostics.iter().filter(|d| d.is_error()).count();
+        let warnings = report.diagnostics.len() - errors;
+        match &report.summary {
+            Some(s) => {
+                let parts: Vec<String> = s
+                    .components
+                    .iter()
+                    .map(|c| format!("{}: {} instances, {} copies", c.id, c.instances, c.copies))
+                    .collect();
+                println!(
+                    "ok: {} ({}), {warnings} warning(s)",
+                    s.game,
+                    parts.join("; ")
+                );
+            }
+            None => println!("failed: {errors} error(s), {warnings} warning(s)"),
+        }
+    }
+    if ok {
+        ExitCode::SUCCESS
+    } else {
+        ExitCode::FAILURE
     }
 }
 
@@ -73,28 +169,53 @@ struct Report {
 }
 
 fn render(args: &RenderArgs) -> Result<Report> {
-    let world = ProjectWorld::new(&args.root, &args.entry, &args.font_paths, args.inputs.clone())?;
+    let world = ProjectWorld::new(
+        &args.root,
+        &args.entry,
+        &args.font_paths,
+        args.inputs.clone(),
+    )?;
     let compiled = match rtt_core::compile(&world) {
         Ok(c) => c,
-        Err(diagnostics) => return Ok(Report { ok: false, artifacts: vec![], diagnostics }),
+        Err(diagnostics) => {
+            return Ok(Report {
+                ok: false,
+                artifacts: vec![],
+                diagnostics,
+            });
+        }
     };
 
-    fs::create_dir_all(&args.out).with_context(|| format!("cannot create {}", args.out.display()))?;
-    let stem = args.entry.file_stem().and_then(|s| s.to_str()).unwrap_or("out");
+    fs::create_dir_all(&args.out)
+        .with_context(|| format!("cannot create {}", args.out.display()))?;
+    let stem = args
+        .entry
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .unwrap_or("out");
     let mut artifacts = Vec::new();
 
     match args.format {
         Format::Pdf => {
             let bytes = match rtt_core::export_pdf(&world, &compiled.document) {
                 Ok(b) => b,
-                Err(diagnostics) => return Ok(Report { ok: false, artifacts, diagnostics }),
+                Err(diagnostics) => {
+                    return Ok(Report {
+                        ok: false,
+                        artifacts,
+                        diagnostics,
+                    });
+                }
             };
             let path = args.out.join(format!("{stem}.pdf"));
             fs::write(&path, bytes)?;
             artifacts.push(path.display().to_string());
         }
         Format::Png => {
-            for (i, png) in rtt_core::export_pngs(&compiled.document, args.ppi)?.into_iter().enumerate() {
+            for (i, png) in rtt_core::export_pngs(&compiled.document, args.ppi)?
+                .into_iter()
+                .enumerate()
+            {
                 let path = args.out.join(format!("{stem}-{:03}.png", i + 1));
                 fs::write(&path, png)?;
                 artifacts.push(path.display().to_string());
@@ -102,12 +223,19 @@ fn render(args: &RenderArgs) -> Result<Report> {
         }
     }
 
-    Ok(Report { ok: true, artifacts, diagnostics: compiled.warnings })
+    Ok(Report {
+        ok: true,
+        artifacts,
+        diagnostics: compiled.warnings,
+    })
 }
 
 fn emit(report: &Report, json: bool) {
     if json {
-        println!("{}", serde_json::to_string_pretty(report).expect("report is serializable"));
+        println!(
+            "{}",
+            serde_json::to_string_pretty(report).expect("report is serializable")
+        );
         return;
     }
     for d in &report.diagnostics {

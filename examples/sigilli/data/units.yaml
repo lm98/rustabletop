@@ -1,0 +1,66 @@
+- id: ember-adept
+  name: Adepta della Brace
+  suit: fuoco
+  cost: 1
+  qty: 3
+  text: 'Quando entra: infliggi 1 danno. :fuoco:'
+  flavor: Ogni scintilla ricorda il primo incendio.
+- id: pyre-warden
+  name: Custode del Rogo
+  suit: fuoco
+  cost: 3
+  qty: 2
+  text: 'Le tue carte :fuoco: costano 1 in meno.'
+- id: ash-titan
+  name: Titano di Cenere
+  suit: fuoco
+  cost: 6
+  text: 'Travolgere. Quando muore: ogni giocatore scarta una carta :fuoco: o perde 2 vita. Se nessuno
+    scarta, pesca due carte e infliggi 3 danni a ogni creatura nemica che non sia :terra:.'
+  flavor: Dove cammina non cresce più nulla.
+- id: tide-seer
+  name: Veggente delle Maree
+  suit: acqua
+  cost: 2
+  qty: 3
+  text: Guarda le prime 3 carte del mazzo. Rimettine 1 in fondo.
+  flavor: Il mare restituisce sempre ciò che prende.
+- id: drowned-king
+  name: Re Annegato
+  suit: acqua
+  cost: 5
+  text: 'Quando attacca: ruba un Sigillo :acqua:.'
+- id: stone-sentinel
+  name: Sentinella di Pietra
+  suit: terra
+  cost: 2
+  qty: 3
+  text: 'Difensore. :terra::terra:'
+- id: root-mother
+  name: Madre delle Radici
+  suit: terra
+  cost: 4
+  qty: 2
+  text: 'All''inizio del tuo turno: guadagni 1 :terra:.'
+  flavor: Le radici ascoltano più di quanto parlino.
+- id: gale-dancer
+  name: Danzatrice del Vento
+  suit: aria
+  cost: 1
+  qty: 3
+  text: Rapidità.
+- id: storm-herald
+  name: Araldo della Tempesta
+  suit: aria
+  cost: 4
+  qty: 2
+  text: 'Quando entra: ruota una carta bersaglio. :aria:'
+  flavor: Il tuono arriva sempre dopo.
+- id: void-oracle
+  name: Oracolo del Vuoto
+  suit: aria
+  cost: 7
+  text: 'Quando entra: ogni giocatore rivela la mano. Per ogni carta :fuoco: rivelata, infliggi 1 danno
+    al suo proprietario; per ogni carta :acqua:, il suo proprietario pesca una carta; per ogni carta :terra:,
+    guadagna 1 vita; per ogni carta :aria:, ruotala. Poi ogni giocatore rimescola la propria mano nel
+    mazzo e pesca altrettante carte meno una. Se un giocatore non può pescare, perde un Sigillo.'

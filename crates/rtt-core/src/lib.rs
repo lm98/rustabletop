@@ -1,7 +1,15 @@
+#![allow(clippy::result_large_err)]
+
 mod diagnostics;
+mod project;
+mod schema;
+mod source;
+mod units;
 mod world;
 
-pub use diagnostics::{Diagnostic, Location, Severity};
+pub use diagnostics::{Diagnostic, Location, Severity, Subject};
+pub use project::{Checked, Component, Faces, Instance, Kind, MANIFEST_FILE, Project, check};
+pub use units::{Length, SIZE_PRESETS, Size};
 pub use world::ProjectWorld;
 
 use typst_layout::PagedDocument;
@@ -30,9 +38,15 @@ pub fn compile(world: &ProjectWorld) -> Result<Compiled, Vec<Diagnostic>> {
     }
 }
 
-pub fn export_pdf(world: &ProjectWorld, document: &PagedDocument) -> Result<Vec<u8>, Vec<Diagnostic>> {
-    typst_pdf::pdf(document, &PdfOptions::default())
-        .map_err(|errs| errs.iter().map(|d| Diagnostic::from_typst(world, d)).collect())
+pub fn export_pdf(
+    world: &ProjectWorld,
+    document: &PagedDocument,
+) -> Result<Vec<u8>, Vec<Diagnostic>> {
+    typst_pdf::pdf(document, &PdfOptions::default()).map_err(|errs| {
+        errs.iter()
+            .map(|d| Diagnostic::from_typst(world, d))
+            .collect()
+    })
 }
 
 pub fn export_pngs(document: &PagedDocument, ppi: f32) -> anyhow::Result<Vec<Vec<u8>>> {
