@@ -60,7 +60,7 @@ fn line_of(file: &Path, needle: &str) -> usize {
 }
 
 #[test]
-fn sigilli_builds_from_the_manifest() {
+fn m2_exit_criterion_sigilli_builds_from_the_manifest() {
     let out = scratch("sigilli");
     let built = build_into(&example(), &out);
     assert!(built.ok, "{:#?}", built.diagnostics);
@@ -68,10 +68,11 @@ fn sigilli_builds_from_the_manifest() {
 
     let project = check(&example()).project.unwrap();
     let plan = Plan::new(&project).unwrap();
-    assert_eq!(plan.sheet_count(), 6);
-    assert_eq!(plan.preview_count(), 20);
+    assert_eq!(plan.sheets_of(0).len(), 6);
+    assert_eq!(plan.sheet_count(), 8);
+    assert_eq!(plan.preview_count(), 20 + 8 + 1);
 
-    assert_eq!(built.artifacts.len(), 21);
+    assert_eq!(built.artifacts.len(), 30);
     let pdf = out.join("sigilli-pnp.pdf");
     assert_eq!(built.artifacts[0], pdf.display().to_string());
     assert!(fs::read(&pdf).unwrap().starts_with(b"%PDF"));
@@ -162,4 +163,76 @@ fn missing_face_function_and_asset_are_reported() {
     );
     let asset = &checked.diagnostics[0];
     assert_eq!(asset.hints, ["did you mean `hero.svg`?"]);
+}
+
+fn fixture(name: &str) -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("tests/fixtures")
+        .join(name)
+}
+
+fn codes(root: &Path) -> Vec<(&'static str, usize, Vec<String>)> {
+    check(root)
+        .diagnostics
+        .into_iter()
+        .map(|d| (d.code, d.location.map_or(0, |l| l.line), d.hints))
+        .collect()
+}
+
+#[test]
+fn m2_5_exit_criterion_sigilli_tokens_are_imposed_with_cut_lines() {
+    let project = check(&example()).project.unwrap();
+    let plan = Plan::new(&project).unwrap();
+
+    let seals = plan.sheets_of(1);
+    assert_eq!(seals.len(), 1);
+    let seal = seals[0];
+    assert!(seal.cut_lines && seal.fold.is_some() && seal.marks.is_empty());
+    let fronts = seal.cells.iter().filter(|c| c.face == "front").count();
+    assert_eq!(fronts, 12);
+    assert_eq!(seal.cells.len(), 24);
+
+    let vortex = plan.sheets_of(2);
+    assert_eq!(vortex.len(), 1);
+    assert!(vortex[0].cut_lines && vortex[0].fold.is_none());
+    assert_eq!(vortex[0].cells.len(), 6);
+    assert!(vortex[0].cells.iter().all(|c| c.face == "front"));
+
+    let vortex = &project.components[2];
+    assert_eq!(vortex.instances.len(), 1);
+    assert_eq!(vortex.instances[0].id, "vortex");
+    assert_eq!(vortex.instances[0].qty, 6);
+}
+
+#[test]
+fn m2_5_exit_criterion_unknown_face_on_a_token() {
+    let got = codes(&fixture("token-bad-face"));
+    assert_eq!(got.len(), 1, "{got:#?}");
+    let (code, line, hints) = &got[0];
+    assert_eq!((*code, *line), ("manifest.face", 11));
+    assert!(hints.iter().any(|h| h == "faces: front, back"));
+}
+
+#[test]
+fn token_manifest_errors_point_at_the_option() {
+    let got: Vec<(&str, usize)> = codes(&fixture("token-bad-options"))
+        .into_iter()
+        .map(|(code, line, _)| (code, line))
+        .collect();
+    assert_eq!(
+        got,
+        [
+            ("manifest.shape", 6),
+            ("manifest.print", 17),
+            ("manifest.data", 26),
+        ]
+    );
+}
+
+#[test]
+fn inline_fields_are_validated_by_the_schema() {
+    let got = codes(&fixture("inline-fields"));
+    assert_eq!(got.len(), 1, "{got:#?}");
+    assert_eq!((got[0].0, got[0].1), ("data.unknown-field", 13));
+    assert!(got[0].2.iter().any(|h| h == "did you mean `title`?"));
 }

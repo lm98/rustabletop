@@ -16,7 +16,7 @@ use typst_pdf::PdfOptions;
 use typst_render::RenderOptions;
 
 use crate::diagnostics::{Diagnostic, Subject};
-use crate::impose::{self, Grid, Sheet, Side};
+use crate::impose::{self, Layout, Sheet};
 use crate::project::{self, Component, Project};
 use crate::schema::{self, Format};
 use crate::world::ProjectWorld;
@@ -104,10 +104,10 @@ pub fn build(root: &Path, options: &BuildOptions) -> Result<Built> {
     };
     for (page, preview) in document.pages().iter().skip(sheets).zip(&plan.previews) {
         let component = &project.components[preview.component];
-        let instance = &component.instances[preview.card];
+        let instance = &component.instances[preview.item];
         let dir = options.out.join(&component.id);
         fs::create_dir_all(&dir)?;
-        let path = dir.join(format!("{}-{}.png", instance.id, side_name(preview.face)));
+        let path = dir.join(format!("{}-{}.png", instance.id, preview.face));
         let png = typst_render::render(page, &render)
             .encode_png()
             .map_err(|e| anyhow::anyhow!("png encoding failed: {e}"))?;
@@ -141,18 +141,11 @@ fn pdf(
     })
 }
 
-fn side_name(side: Side) -> &'static str {
-    match side {
-        Side::Front => "front",
-        Side::Back => "back",
-    }
-}
-
 #[derive(Debug, Serialize)]
 struct Preview {
     component: usize,
-    card: usize,
-    face: Side,
+    item: usize,
+    face: &'static str,
 }
 
 #[derive(Debug, Serialize)]
@@ -173,14 +166,23 @@ impl Plan {
 
         for (index, component) in project.components.iter().enumerate() {
             let bleed = component.bleed.as_mm();
-            let Some(grid) = Grid::new(&project.print, component.size, bleed) else {
+            let bbox = component.shape.bbox();
+            let layout = Layout::new(
+                component.kind,
+                &project.print,
+                bbox,
+                bleed,
+                component.production,
+            );
+            let Some(grid) = impose::grid(&layout) else {
                 errors.push(
                     Diagnostic::error(
                         "print.too-large",
                         format!(
-                            "a {} × {} card with {} bleed does not fit on {:?} paper with {} margins",
-                            component.size.width,
-                            component.size.height,
+                            "a {} × {} {} with {} bleed does not fit on {:?} paper with {} margins",
+                            bbox.width,
+                            bbox.height,
+                            component.kind.name(),
                             component.bleed,
                             project.print.paper,
                             project.print.margin
@@ -200,26 +202,13 @@ impl Plan {
                 .enumerate()
                 .flat_map(|(i, instance)| std::iter::repeat_n(i, instance.qty as usize))
                 .collect();
-            let has_back = component.faces.back.is_some();
-            sheets.extend(impose::sheets(
-                index,
-                &copies,
-                &grid,
-                bleed,
-                &project.print,
-                has_back,
-            ));
-            for card in 0..component.instances.len() {
-                previews.push(Preview {
-                    component: index,
-                    card,
-                    face: Side::Front,
-                });
-                if has_back {
+            sheets.extend(impose::sheets(index, &copies, &layout, &grid));
+            for item in 0..component.instances.len() {
+                for face in component.face_names() {
                     previews.push(Preview {
                         component: index,
-                        card,
-                        face: Side::Back,
+                        item,
+                        face,
                     });
                 }
             }
@@ -239,6 +228,13 @@ impl Plan {
 
     pub fn sheet_count(&self) -> usize {
         self.sheets.len()
+    }
+
+    pub fn sheets_of(&self, component: usize) -> Vec<&Sheet> {
+        self.sheets
+            .iter()
+            .filter(|s| s.component == component)
+            .collect()
     }
 
     pub fn preview_count(&self) -> usize {
@@ -261,20 +257,20 @@ impl Plan {
 
 fn component_data(component: &Component) -> Value {
     let properties = schema::property_names(&component.schema);
-    let cards: Vec<Value> = component
+    let items: Vec<Value> = component
         .instances
         .iter()
         .map(|instance| {
-            let mut card = Map::new();
-            card.insert("id".into(), instance.id.clone().into());
-            card.insert("qty".into(), instance.qty.into());
+            let mut item = Map::new();
+            item.insert("id".into(), instance.id.clone().into());
+            item.insert("qty".into(), instance.qty.into());
             for name in &properties {
                 if name != "id" && name != "qty" {
                     let value = instance.fields.get(name).cloned().unwrap_or(Value::Null);
-                    card.insert(name.clone(), value);
+                    item.insert(name.clone(), value);
                 }
             }
-            Value::Object(card)
+            Value::Object(item)
         })
         .collect();
     let assets: Vec<String> = schema::formatted_fields(&component.schema)
@@ -282,12 +278,15 @@ fn component_data(component: &Component) -> Value {
         .filter(|(_, format)| *format == Format::Asset)
         .map(|(name, _)| name)
         .collect();
+    let bbox = component.shape.bbox();
     json!({
         "id": component.id,
-        "trim": [component.size.width.as_mm(), component.size.height.as_mm()],
+        "kind": component.kind.name(),
+        "shape": component.shape.to_json(),
+        "trim": [bbox.width.as_mm(), bbox.height.as_mm()],
         "bleed": component.bleed.as_mm(),
         "assets": assets,
-        "cards": cards,
+        "items": items,
     })
 }
 
@@ -296,15 +295,10 @@ fn main_source(project: &Project) -> String {
     let mut faces = String::new();
     for (i, component) in project.components.iter().enumerate() {
         let mut entry = String::new();
-        for (face, path) in [
-            ("front", Some(&component.faces.front)),
-            ("back", component.faces.back.as_ref()),
-        ] {
-            if let Some(path) = path {
-                let alias = format!("rtt-face-{i}-{face}");
-                let _ = writeln!(src, "#import {:?}: {face} as {alias}", format!("/{path}"));
-                let _ = write!(entry, "{face}: {alias}, ");
-            }
+        for (face, path) in &component.faces {
+            let alias = format!("rtt-face-{i}-{face}");
+            let _ = writeln!(src, "#import {:?}: {face} as {alias}", format!("/{path}"));
+            let _ = write!(entry, "{face}: {alias}, ");
         }
         let _ = write!(faces, "({entry}), ");
     }
@@ -313,29 +307,48 @@ fn main_source(project: &Project) -> String {
     src
 }
 
-const MAIN_BODY: &str = r#"#let rtt-data = json("{DATA}")
+const MAIN_BODY: &str = r#"#import "@rtt/std:0.1.0": outline
+#let rtt-data = json("{DATA}")
 #let rtt-mm(v) = v * 1mm
 #let rtt-path(v) = if v == none { none } else if type(v) == array { v.map(rtt-path) } else { path("/" + v) }
 #let rtt-components = rtt-data.components.map(c => {
-  let cards = c.cards.map(card => {
-    for field in c.assets { card.insert(field, rtt-path(card.at(field))) }
-    card
+  let items = c.items.map(item => {
+    for field in c.assets { item.insert(field, rtt-path(item.at(field))) }
+    item
   })
-  (..c, cards: cards)
+  (..c, items: items)
 })
 
-#let rtt-face(ci, k, face) = {
-  let c = rtt-components.at(ci)
-  let card = c.cards.at(k)
-  let ctx = (
+#let rtt-ctx(c, face, item) = {
+  let s = c.shape
+  (
+    kind: c.kind,
+    shape: (
+      type: s.type,
+      orientation: s.orientation,
+      width: rtt-mm(s.width),
+      height: rtt-mm(s.height),
+      radius: if s.radius == none { none } else { rtt-mm(s.radius) },
+      inscribed: (
+        x: rtt-mm(s.inscribed.at(0)), y: rtt-mm(s.inscribed.at(1)),
+        width: rtt-mm(s.inscribed.at(2)), height: rtt-mm(s.inscribed.at(3)),
+      ),
+    ),
     trim: (width: rtt-mm(c.trim.at(0)), height: rtt-mm(c.trim.at(1))),
     bleed: rtt-mm(c.bleed),
     component: c.id,
     face: face,
+    item: item,
   )
+}
+
+#let rtt-face(ci, k, face) = {
+  let c = rtt-components.at(ci)
+  let item = c.items.at(k)
+  let ctx = rtt-ctx(c, face, item.id)
   box(width: ctx.trim.width + 2 * ctx.bleed, height: ctx.trim.height + 2 * ctx.bleed, clip: true, {
-    place([#metadata((component: c.id, card: card.id, face: face)) <rtt-face>])
-    rtt-faces.at(ci).at(face)(card, ctx)
+    place([#metadata((component: c.id, item: item.id, face: face)) <rtt-face>])
+    rtt-faces.at(ci).at(face)(item, ctx)
   })
 }
 
@@ -348,12 +361,23 @@ const MAIN_BODY: &str = r#"#let rtt-data = json("{DATA}")
     for m in sheet.marks {
       place(top + left, line(start: (rtt-mm(m.x1), rtt-mm(m.y1)), end: (rtt-mm(m.x2), rtt-mm(m.y2)), stroke: 0.25pt + black))
     }
+    if sheet.fold != none {
+      let f = sheet.fold
+      place(top + left, line(start: (rtt-mm(f.x1), rtt-mm(f.y1)), end: (rtt-mm(f.x2), rtt-mm(f.y2)),
+        stroke: (paint: luma(120), thickness: 0.4pt, dash: "dashed")))
+    }
     for cell in sheet.cells {
-      let face = rtt-face(sheet.component, cell.card, sheet.face)
-      if sheet.rotate { face = rotate(180deg, face) }
+      let face = rtt-face(sheet.component, cell.item, cell.face)
+      if cell.rotate { face = rotate(180deg, face) }
       place(top + left, dx: rtt-mm(cell.x - cell.l), dy: rtt-mm(cell.y - cell.t),
         box(width: rtt-mm(w + cell.l + cell.r), height: rtt-mm(h + cell.t + cell.b), clip: true,
           place(top + left, dx: rtt-mm(cell.l - b), dy: rtt-mm(cell.t - b), face)))
+    }
+    if sheet.cut_lines {
+      for cell in sheet.cells {
+        place(top + left, dx: rtt-mm(cell.x - b), dy: rtt-mm(cell.y - b),
+          outline(rtt-ctx(c, cell.face, none), fill: none, stroke: 0.3pt + luma(60)))
+      }
     }
   })
 }
@@ -361,7 +385,7 @@ const MAIN_BODY: &str = r#"#let rtt-data = json("{DATA}")
 #for p in rtt-data.previews {
   let c = rtt-components.at(p.component)
   page(width: rtt-mm(c.trim.at(0) + 2 * c.bleed), height: rtt-mm(c.trim.at(1) + 2 * c.bleed), margin: 0pt,
-    rtt-face(p.component, p.card, p.face))
+    rtt-face(p.component, p.item, p.face))
 }
 "#;
 
@@ -388,9 +412,9 @@ fn overflows(project: &Project, document: &PagedDocument) -> Vec<Diagnostic> {
         }
         let Some(face) = &current else { continue };
         let text = |v: &Value, key: &str| v.get(key).and_then(Value::as_str).map(str::to_owned);
-        let (Some(component), Some(card), Some(side)) = (
+        let (Some(component), Some(item), Some(side)) = (
             text(face, "component"),
-            text(face, "card"),
+            text(face, "item"),
             text(face, "face"),
         ) else {
             continue;
@@ -400,26 +424,26 @@ fn overflows(project: &Project, document: &PagedDocument) -> Vec<Diagnostic> {
             .get("size")
             .and_then(Value::as_f64)
             .unwrap_or_default();
-        if !seen.insert((component.clone(), card.clone(), side.clone(), field.clone())) {
+        if !seen.insert((component.clone(), item.clone(), side.clone(), field.clone())) {
             continue;
         }
         let instance = project
             .components
             .iter()
             .find(|c| c.id == component)
-            .and_then(|c| c.instances.iter().find(|i| i.id == card));
+            .and_then(|c| c.instances.iter().find(|i| i.id == item));
         let what = match &field {
             Some(f) => format!("`{f}`"),
             None => format!("a `fit` block on the {side}"),
         };
         let mut diagnostic = Diagnostic::warning(
             "render.overflow",
-            format!("{what} of {component}/{card} does not fit at {size}pt"),
+            format!("{what} of {component}/{item} does not fit at {size}pt"),
         )
         .at(instance.and_then(|i| i.location(field.as_deref())))
         .about(Subject {
             component: Some(component),
-            instance: Some(card),
+            instance: Some(item),
             field: field.clone(),
         })
         .hint("shorten the text, or lower `min` in the template's `fit`");

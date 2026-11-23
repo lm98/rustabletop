@@ -9,8 +9,7 @@ icons:
 print:
   paper: a4
   margin: 5mm
-  crop-marks: true
-  duplex: long-edge
+  duplex-edge: long
 
 components:
   - id: unit-card
@@ -30,3 +29,39 @@ components:
       front: templates/card.typ
       back: templates/card.typ
     data: data/units.yaml
+    print:
+      sides: duplex
+      crop-marks: true
+
+  - id: seal
+    kind: token
+    shape: circle
+    size: 25mm
+    bleed: 2mm
+    schema:
+      required: [suit, name]
+      properties:
+        suit: { enum: [fuoco, acqua, terra, aria] }
+        name: { type: string, maxLength: 12 }
+    faces:
+      front: templates/seal.typ
+      back: templates/seal.typ
+    data: data/seals.yaml
+    print:
+      sides: fold
+
+  - id: vortex
+    kind: token
+    shape: hex
+    size: 30mm
+    orientation: pointy
+    bleed: 2mm
+    schema:
+      required: [label]
+      properties:
+        label: { type: string }
+    faces:
+      front: templates/vortex.typ
+    fields:
+      qty: 6
+      label: Vortice

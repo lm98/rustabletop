@@ -1,0 +1,26 @@
+game: fixture
+components:
+  - id: wound
+    kind: token
+    shape: circle
+    orientation: flat
+    size: 25mm
+    faces:
+      front: face.typ
+  - id: marker
+    kind: token
+    shape: square
+    size: 20mm
+    faces:
+      front: face.typ
+    print:
+      sides: fold
+      crop-marks: true
+  - id: start
+    kind: token
+    shape: hex
+    size: 30mm
+    faces:
+      front: face.typ
+    data: data/start.yaml
+    fields: { qty: 1 }
