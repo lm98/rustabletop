@@ -1,0 +1,11 @@
+game: fixture
+components:
+  - id: wound
+    kind: token
+    shape: circle
+    size: 25mm
+    schema:
+      properties: {}
+    faces:
+      front: face.typ
+      left: face.typ

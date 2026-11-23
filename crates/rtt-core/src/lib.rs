@@ -1,6 +1,7 @@
 #![allow(clippy::result_large_err)]
 
 mod build;
+mod component;
 mod diagnostics;
 mod impose;
 mod project;
@@ -11,9 +12,11 @@ mod units;
 mod world;
 
 pub use build::{BuildOptions, Built, Plan, build};
+pub use component::{Kind, Orientation, Production, Shape, Sides};
 pub use diagnostics::{Diagnostic, Location, Severity, Subject};
+pub use impose::{Cell, Sheet};
 pub use project::{
-    Checked, Component, Duplex, Faces, Instance, Kind, MANIFEST_FILE, Paper, Print, Project, check,
+    Checked, Component, DuplexEdge, Instance, MANIFEST_FILE, Paper, Print, Project, check,
 };
 pub use units::{Length, SIZE_PRESETS, Size};
 pub use world::{ProjectWorld, STD_PACKAGE};

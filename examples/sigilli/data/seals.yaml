@@ -1,0 +1,16 @@
+- id: seal-fuoco
+  suit: fuoco
+  name: Brace
+  qty: 3
+- id: seal-acqua
+  suit: acqua
+  name: Marea
+  qty: 3
+- id: seal-terra
+  suit: terra
+  name: Radice
+  qty: 3
+- id: seal-aria
+  suit: aria
+  name: Vento
+  qty: 3

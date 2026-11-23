@@ -1,0 +1,13 @@
+game: fixture
+components:
+  - id: dungeon-tile
+    kind: token
+    shape: square
+    size: 40mm
+    schema:
+      properties:
+        title: { type: string }
+    faces:
+      front: face.typ
+    fields:
+      titel: Le Cripte

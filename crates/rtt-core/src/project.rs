@@ -5,6 +5,7 @@ use std::path::{Path, PathBuf};
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 
+use crate::component::{self, Kind, Orientation, Production, ProductionDoc, Shape, ShapeDoc};
 use crate::diagnostics::{Diagnostic, Location, Subject};
 use crate::schema;
 use crate::source::{self, Located, pointer_push};
@@ -13,19 +14,6 @@ use crate::units::{Length, Size};
 
 pub const MANIFEST_FILE: &str = "game.yaml";
 const DEFAULT_BLEED: Length = Length::mm(3.0);
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "lowercase")]
-pub enum Kind {
-    Card,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct Faces {
-    pub front: String,
-    pub back: Option<String>,
-}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -48,11 +36,10 @@ impl Paper {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "kebab-case")]
-pub enum Duplex {
-    LongEdge,
-    ShortEdge,
-    None,
+#[serde(rename_all = "lowercase")]
+pub enum DuplexEdge {
+    Long,
+    Short,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -60,8 +47,7 @@ pub enum Duplex {
 pub struct Print {
     pub paper: Paper,
     pub margin: Length,
-    pub crop_marks: bool,
-    pub duplex: Duplex,
+    pub duplex_edge: DuplexEdge,
 }
 
 impl Default for Print {
@@ -69,8 +55,7 @@ impl Default for Print {
         Self {
             paper: Paper::A4,
             margin: Length::mm(5.0),
-            crop_marks: true,
-            duplex: Duplex::LongEdge,
+            duplex_edge: DuplexEdge::Long,
         }
     }
 }
@@ -92,11 +77,16 @@ struct ManifestDoc {
 struct ComponentDoc {
     id: String,
     kind: Kind,
+    shape: Option<Value>,
     size: Value,
+    orientation: Option<Orientation>,
+    radius: Option<Length>,
     bleed: Option<Length>,
-    schema: Value,
-    faces: Faces,
-    data: String,
+    schema: Option<Value>,
+    faces: BTreeMap<String, String>,
+    data: Option<String>,
+    fields: Option<Value>,
+    print: Option<ProductionDoc>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -114,10 +104,11 @@ pub struct Project {
 pub struct Component {
     pub id: String,
     pub kind: Kind,
-    pub size: Size,
+    pub shape: Shape,
     pub bleed: Length,
-    pub faces: Faces,
-    pub data: String,
+    pub faces: BTreeMap<String, String>,
+    pub production: Production,
+    pub data: Option<String>,
     pub schema: Value,
     pub instances: Vec<Instance>,
 }
@@ -145,6 +136,19 @@ impl Instance {
 impl Component {
     pub fn total_qty(&self) -> u64 {
         self.instances.iter().map(|i| i.qty).sum()
+    }
+
+    pub fn face_names(&self) -> Vec<&'static str> {
+        self.kind
+            .faces()
+            .iter()
+            .copied()
+            .filter(|f| self.faces.contains_key(*f))
+            .collect()
+    }
+
+    pub fn has_back(&self) -> bool {
+        self.faces.contains_key("back")
     }
 }
 
@@ -247,17 +251,53 @@ fn load(root: &Path, diags: &mut Vec<Diagnostic>) -> Option<Project> {
             );
         }
 
-        let size = Size::from_value(&comp.size)
-            .map_err(|m| {
-                diags.push(
-                    Diagnostic::error("manifest.size", m)
-                        .at(at("/size"))
-                        .about(subject.clone()),
-                )
-            })
-            .ok();
+        let shape = component::parse_shape(&ShapeDoc {
+            kind: comp.kind,
+            shape: comp.shape.as_ref(),
+            size: &comp.size,
+            orientation: comp.orientation,
+            radius: comp.radius,
+        })
+        .map_err(|e| {
+            let code = if e.key == "size" {
+                "manifest.size"
+            } else {
+                "manifest.shape"
+            };
+            diags.push(
+                Diagnostic::error(code, e.message)
+                    .at(at(&format!("/{}", e.key)))
+                    .about(subject.clone())
+                    .hints(e.hints),
+            )
+        })
+        .ok();
 
-        let issues = schema::lint(&comp.schema);
+        let faces_ok = check_faces(comp.kind, &comp.faces, &at, &subject, diags);
+        let production = component::production(
+            comp.kind,
+            comp.faces.contains_key("back"),
+            &comp.print.clone().unwrap_or_default(),
+        )
+        .map_err(|e| {
+            let pointer = match e.key {
+                "print" => "/print".to_owned(),
+                key => format!("/print/{key}"),
+            };
+            diags.push(
+                Diagnostic::error("manifest.print", e.message)
+                    .at(at(&pointer))
+                    .about(subject.clone())
+                    .hints(e.hints),
+            )
+        })
+        .ok();
+
+        let user_schema = comp
+            .schema
+            .clone()
+            .unwrap_or_else(|| Value::Object(Map::new()));
+        let issues = schema::lint(&user_schema);
         if !issues.is_empty() {
             for issue in issues {
                 diags.push(
@@ -270,7 +310,7 @@ fn load(root: &Path, diags: &mut Vec<Diagnostic>) -> Option<Project> {
             continue;
         }
 
-        let schema = match schema::effective_schema(&comp.schema) {
+        let schema = match schema::effective_schema(&user_schema) {
             Ok(s) => s,
             Err(m) => {
                 diags.push(
@@ -294,11 +334,8 @@ fn load(root: &Path, diags: &mut Vec<Diagnostic>) -> Option<Project> {
             }
         };
 
-        for (face, path) in [
-            ("front", Some(&comp.faces.front)),
-            ("back", comp.faces.back.as_ref()),
-        ] {
-            let Some(path) = path else { continue };
+        for (face, path) in comp.faces.iter().filter(|_| faces_ok) {
+            let face = face.as_str();
             let declared = at(&format!("/faces/{face}"));
             match read_inside(root, path) {
                 None => diags.push(
@@ -317,15 +354,60 @@ fn load(root: &Path, diags: &mut Vec<Diagnostic>) -> Option<Project> {
                     .at(declared)
                     .about(subject.clone())
                     .hint(format!(
-                        "the file must export `#let {face}(card, ctx) = {{ ... }}`"
+                        "the file must export `#let {face}(item, ctx) = {{ ... }}`"
                     )),
                 ),
                 Some(_) => {}
             }
         }
 
-        let Some(data) = load_data(root, &comp.data, &schema, at("/data"), &subject, diags) else {
-            continue;
+        let (data, records) = match (&comp.data, &comp.fields) {
+            (Some(_), Some(_)) => {
+                diags.push(
+                    Diagnostic::error("manifest.data", "`data` and `fields` cannot be used together")
+                        .at(at("/fields"))
+                        .about(subject)
+                        .hint("use `data` for a file of records, or `fields` for a single inline instance"),
+                );
+                continue;
+            }
+            (Some(rel), None) => {
+                let Some(data) = load_data(root, rel, &schema, at("/data"), &subject, diags) else {
+                    continue;
+                };
+                let records = data
+                    .value
+                    .as_array()
+                    .into_iter()
+                    .flatten()
+                    .enumerate()
+                    .map(|(i, r)| (format!("/{i}"), r.clone()))
+                    .collect();
+                (data, records)
+            }
+            (None, fields) => {
+                let mut record = match fields {
+                    None => Map::new(),
+                    Some(Value::Object(map)) => map.clone(),
+                    Some(_) => {
+                        diags.push(
+                            Diagnostic::error("manifest.data", "`fields` must be a mapping")
+                                .at(at("/fields"))
+                                .about(subject),
+                        );
+                        continue;
+                    }
+                };
+                record
+                    .entry("id")
+                    .or_insert_with(|| Value::String(comp.id.clone()));
+                let base = if fields.is_some() {
+                    format!("{base}/fields")
+                } else {
+                    base.clone()
+                };
+                (manifest.clone(), vec![(base, Value::Object(record))])
+            }
         };
         let context = RecordContext {
             root,
@@ -334,15 +416,16 @@ fn load(root: &Path, diags: &mut Vec<Diagnostic>) -> Option<Project> {
             validator: &validator,
             icons: &icons,
         };
-        let instances = validate_records(&data, &context, diags);
+        let instances = validate_records(&data, &records, &context, diags);
 
-        if let Some(size) = size {
+        if let (Some(shape), Some(production), true) = (shape, production, faces_ok) {
             components.push(Component {
                 id: comp.id,
                 kind: comp.kind,
-                size,
+                shape,
                 bleed: comp.bleed.unwrap_or(DEFAULT_BLEED),
                 faces: comp.faces,
+                production,
                 data: comp.data,
                 schema,
                 instances,
@@ -358,6 +441,38 @@ fn load(root: &Path, diags: &mut Vec<Diagnostic>) -> Option<Project> {
         fonts,
         components,
     })
+}
+
+fn check_faces(
+    kind: Kind,
+    faces: &BTreeMap<String, String>,
+    at: &dyn Fn(&str) -> Option<Location>,
+    subject: &Subject,
+    diags: &mut Vec<Diagnostic>,
+) -> bool {
+    let allowed: Vec<String> = kind.faces().iter().map(|f| (*f).to_owned()).collect();
+    let before = diags.len();
+    for name in faces.keys().filter(|n| !allowed.contains(n)) {
+        diags.push(
+            Diagnostic::error(
+                "manifest.face",
+                format!("a {} has no face `{name}`", kind.name()),
+            )
+            .at(at(&pointer_push("/faces", name)))
+            .about(subject.clone())
+            .hints(schema::suggest(name, &allowed))
+            .hint(format!("faces: {}", allowed.join(", "))),
+        );
+    }
+    if !faces.contains_key("front") {
+        diags.push(
+            Diagnostic::error("manifest.face", "missing required face `front`")
+                .at(at("/faces"))
+                .about(subject.clone())
+                .hint(format!("faces: {}", allowed.join(", "))),
+        );
+    }
+    diags.len() == before
 }
 
 fn read_inside(root: &Path, rel: &str) -> Option<String> {
@@ -503,6 +618,7 @@ struct RecordContext<'a> {
 
 fn validate_records(
     data: &Located,
+    records: &[(String, Value)],
     context: &RecordContext,
     diags: &mut Vec<Diagnostic>,
 ) -> Vec<Instance> {
@@ -514,10 +630,7 @@ fn validate_records(
     } = *context;
     let mut instances = Vec::new();
     let mut ids: HashMap<String, Option<Location>> = HashMap::new();
-    let records = data.value.as_array().map(Vec::as_slice).unwrap_or_default();
-
-    for (i, record) in records.iter().enumerate() {
-        let base = format!("/{i}");
+    for (i, (base, record)) in records.iter().enumerate() {
         let id = record.get("id").and_then(Value::as_str).map(str::to_owned);
         let subject = |field: Option<String>| Subject {
             component: Some(component.to_owned()),
@@ -528,7 +641,7 @@ fn validate_records(
         let Value::Object(fields) = record else {
             diags.push(
                 Diagnostic::error("data.shape", format!("record #{} is not a mapping", i + 1))
-                    .at(data.location(&base))
+                    .at(data.location(base))
                     .about(subject(None)),
             );
             continue;
@@ -548,7 +661,7 @@ fn validate_records(
         }
 
         if let Some(id) = &id {
-            let here = data.location(&pointer_push(&base, "id"));
+            let here = data.location(&pointer_push(base, "id"));
             if let Some(first) = ids.insert(id.clone(), here.clone()) {
                 let previous = first.map(|l| format!("first defined at {}:{}", l.file, l.line));
                 diags.push(
@@ -562,13 +675,13 @@ fn validate_records(
         }
 
         if valid {
-            valid = check_formats(fields, &base, data, context, &subject, diags);
+            valid = check_formats(fields, base, data, context, &subject, diags);
         }
 
         if valid {
             let field_origins = fields
                 .keys()
-                .filter_map(|k| Some((k.clone(), data.location(&pointer_push(&base, k))?)))
+                .filter_map(|k| Some((k.clone(), data.location(&pointer_push(base, k))?)))
                 .collect();
             let mut fields = fields.clone();
             fields.remove("id");
@@ -577,7 +690,7 @@ fn validate_records(
                 id: id.unwrap_or_default(),
                 qty,
                 fields,
-                origin: data.location(&base),
+                origin: data.location(base),
                 field_origins,
             });
         }

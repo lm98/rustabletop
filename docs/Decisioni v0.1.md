@@ -1,6 +1,6 @@
 # rustabletop — Decisioni v0.1
 
-**Stato:** M0, M1, M2 completati (M2 unito con la PR #2, 23/11/2026). Prossima: M2.5, vedi "Spec M2.5 — modello dei componenti e token.md".
+**Stato:** M0, M1, M2, M2.5 completati (M2 unito con la PR #2; M2.5 sul branch `m2.5-components`, 23/11/2026). Prossima: M2.6 (`board`), vedi "Spec M2.5 — modello dei componenti e token.md" §4 e §7.
 **Sostituisce, per lo scope:** le sezioni 5–6, 9, 11–12 del "Design iniziale". I principi delle sezioni 1–2 restano validi come direzione di lungo periodo.
 
 ---
@@ -85,7 +85,7 @@ Il valore non sta nel "dati → carte → PDF", già coperto da nanDECK, Squib, 
 | **M0** ✅ | Spike Typst puro + spike Typst in Rust | Fatto: vedi §6 |
 | **M1** ✅ | Manifest, schema, caricamento YAML/CSV, `rtt check --json` | `qty: three` e `suit: aira` producono due diagnostiche che indicano file, riga e campo, con i valori ammessi |
 | **M2** ✅ | Contratto delle facce, `@rtt/std`, dati virtuali, imposition generata, `rtt build` (PR #2) | Il mazzo dello spike si ricostruisce dal manifest; overflow e icone sconosciute sono diagnostiche localizzate; build deterministico |
-| **M2.5** | Modello dei componenti generalizzato + kind `token` | Vedi "Spec M2.5" §6 |
+| **M2.5** ✅ | Modello dei componenti generalizzato + kind `token` | Fatto: carte con lo stesso layout di M2, Sigillo `circle`/`fold` e Vortice `hex` a faccia singola in `examples/sigilli` con linee di taglio, test del fold, `manifest.face` sulle facce sconosciute, rettangolo inscritto testato; build deterministico |
 | **M2.6** | Kind `board` (tiles / poster, `fields` inline) | Vedi "Spec M2.5" §7 |
 | **M3** | Ciclo agente: `schema`/`render --json`, skill per card, token, board | Claude crea un mini-gioco con carte, token e plancia senza correzioni manuali |
 | **M4** | Export TTS (Deck, Custom Token, Custom Board) | Il gioco si importa in TTS ed è giocabile |
@@ -110,11 +110,19 @@ Backlog dopo v0.1: watch mode, MCP, forme da SVG, disposizione a nido d'ape degl
 - Il manifest si ferma al primo errore (limite di serde), mentre i dati riportano tutti gli errori in una sola passata. Per un agente conta il secondo caso: il manifest cambia raramente.
 - Il caso della virgola non quotata nel CSV ora produce `csv.syntax` con l'indicazione di quotare il campo.
 
+## 6d. Note da M2.5
+
+- Il rettangolo inscritto (`ctx.shape.inscribed`) è calcolato e testato in Rust: per il cerchio è il quadrato di lato d/√2; per l'esagono pointy è largo quanto la distanza tra i lati e alto la metà del riquadro (flat: trasposto). È la soluzione di area massima.
+- L'imposition dei token centra la griglia nell'area utile. Nel `fold` la griglia occupa la metà sinistra, fino a `gap/2` dall'asse, e i retri sono la riflessione delle celle rispetto all'asse. Le linee di taglio si stampano su entrambe le metà.
+- `cut-lines` vale true per default su tutti i token, compresi i `square`: con le celle distanziate serve comunque una guida per il taglio.
+- `board` non è ancora un valore ammesso di `kind`: arriva in M2.6.
+- Codice `manifest.size` riusato per gli errori sulla `size` delle forme; `manifest.shape` per `shape`, `orientation` e `radius`.
+
 ## 7. Rischi
 
 - **Churn dell'API Typst:** versione fissata, upgrade in branch dedicati.
 - **Familiarità degli LLM con Typst inferiore a HTML/SVG:** la stdlib riduce la superficie da scrivere, la skill include esempi completi.
-- **Clip su forme non rettangolari:** se Typst 0.15.1 non lo supporta, clip rettangolare + linea di taglio (vedi Spec M2.5 §2.2).
+- **Clip su forme non rettangolari:** verificato in M2.5, Typst 0.15.1 non ha clip su path arbitrario (solo `radius` sui box). Si usa il clip rettangolare sul riquadro + bleed e la linea di taglio sul contorno.
 - **Nome del binario `rtt`:** collide con RTT (Real-Time Transfer, ecosistema embedded/probe-rs). Da rivedere prima della pubblicazione.
 
 ## 8. Questioni aperte
