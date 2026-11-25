@@ -11,6 +11,9 @@ mkdir eval && cd eval
 rustabletop skill install          # .claude/skills/rustabletop/, caricata all'avvio della sessione
 ```
 
+Finché M3 non è su `main`, l'URL di `install.sh` è quello del branch:
+`https://raw.githubusercontent.com/lm98/rustabletop/m3-agent-loop/install.sh`.
+
 Poi si apre la sessione Claude Code in `eval/`. La skill deve esserci **prima** del brief, altrimenti
 l'agente non sa che rustabletop esiste; quando l'agente esegue `rustabletop new <gioco>`, il progetto
 riceve la propria copia in `<gioco>/.claude/skills/rustabletop/`. Nessuna copia manuale (§12.1).

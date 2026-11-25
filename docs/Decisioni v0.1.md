@@ -1,6 +1,6 @@
 # rustabletop — Decisioni v0.1
 
-**Stato:** M0–M2.6 completati (M2 PR #2, M2.5 PR #3, M2.6 PR #5; 25/11/2026). M3 in corso sul branch `m3-agent-loop`: implementazione e test tecnici (§10) completati, mancano la release di prova e la valutazione con tre brief (§9), vedi "Spec M3 — ciclo agente.md".
+**Stato:** M0–M2.6 completati (M2 PR #2, M2.5 PR #3, M2.6 PR #5; 25/11/2026). M3 in corso sul branch `m3-agent-loop`: implementazione, test tecnici e release di prova (`v0.1.0-alpha.1-test.2`: Linux, macOS, Windows, zip della skill, checksum; `install.sh` verificato) completati, manca la valutazione con tre brief (§9), vedi "Spec M3 — ciclo agente.md".
 **Sostituisce, per lo scope:** le sezioni 5–6, 9, 11–12 del "Design iniziale". I principi delle sezioni 1–2 restano validi come direzione di lungo periodo.
 
 ---
