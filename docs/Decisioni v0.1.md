@@ -1,6 +1,6 @@
 # rustabletop — Decisioni v0.1
 
-**Stato:** M0–M2.6 completati (M2 PR #2, M2.5 PR #3, M2.6 PR #5; 25/11/2026). Prossima: M3, vedi "Spec M3 — ciclo agente.md".
+**Stato:** M0–M2.6 completati (M2 PR #2, M2.5 PR #3, M2.6 PR #5; 25/11/2026). M3 in corso sul branch `m3-agent-loop`: implementazione e test tecnici (§10) completati, mancano la release di prova e la valutazione con tre brief (§9), vedi "Spec M3 — ciclo agente.md".
 **Sostituisce, per lo scope:** le sezioni 5–6, 9, 11–12 del "Design iniziale". I principi delle sezioni 1–2 restano validi come direzione di lungo periodo.
 
 ---
@@ -132,6 +132,18 @@ Backlog dopo v0.1: watch mode, MCP, forme da SVG, disposizione a nido d'ape degl
 - `format: grid-cell` può stare a qualsiasi profondità dello schema (es. `spaces[].at`): i formati custom ora seguono i percorsi annidati, e il campo nella diagnostica è il percorso puntato (`spaces.7.at`).
 - Le opzioni di `print` non ammesse per il kind ora puntano alla chiave stessa (es. `/print/crop-marks`), non a `print`.
 - La pagina di montaggio usa la prima istanza; con `qty > 1` le sezioni si ripetono per ogni copia.
+
+## 6f. Note da M3 (implementazione)
+
+- **Gettone del progetto iniziale esagonale, non `circle`.** La spec §3 chiede un gettone `circle` e una griglia `hex` con `cell` preso dal gettone, ma per le regole di M2.6 una griglia `hex` eredita la cella solo da un token `hex`. Il progetto iniziale usa quindi un `hex` pointy da 25 mm con `sides: fold`: insegna il caso più utile (plance esagonali con gettoni della stessa misura) senza cambiare il formato.
+- `rustabletop render` lavora sul progetto parziale: rende l'istanza richiesta anche se altri componenti hanno errori (ne importa solo i template) e riporta tutte le diagnostiche del progetto; `ok` è falso se ce n'è almeno una di errore. Accetta `<component>` da solo quando il componente ha una sola istanza. Nuovo codice `render.target` (componente, istanza o faccia sconosciuti, con `did you mean`).
+- `rustabletop schema` descrive le forme con le chiavi del loro significato (`width`/`height`/`radius`, `diameter`, `side`/`radius`, `orientation`/`across-flats`) e aggiunge `copies` accanto a `instances`.
+- Bozza: `@rtt/std` importa un file virtuale `mode.typ` (`#let draft = …`) servito dal `World`, così `art()` conosce la modalità senza ricevere `ctx`. In bozza `art` non emette metadati, quindi niente `render.low-resolution`.
+- `render.low-resolution`: dpi effettivi secondo `fit` (`cover`/`stretch`: asse peggiore; `contain`: asse che riempie il riquadro). Le dimensioni in pixel si leggono con `imagesize`, già presente nel grafo delle dipendenze di Typst. Il campo si ricava confrontando il percorso con i campi `asset` del record.
+- Il suggerimento di `render.overflow` ora invita ad accorciare il testo prima di abbassare `min`, come la regola d'oro della skill.
+- Skill: incorporata nel binario con `include_str!` da `skills/rustabletop/`, scritta da `new` e da `skill install` (stato `created`/`unchanged`/`updated` nel report). I test di coerenza ricavano le chiavi del manifest dai messaggi `unknown field` di serde e i codici dalle chiamate a `Diagnostic::error/warning`.
+- Release: Linux compilato su `ubuntu-22.04` (glibc 2.35, compatibile con le distribuzioni recenti), macOS su `macos-14`; Windows non incluso. I tag con `-` sono prerelease; `install.sh` installa l'ultima release, prerelease comprese (oppure `RUSTABLETOP_VERSION`).
+- Versione del workspace portata a `0.1.0-alpha.1`, la prima release prevista da §8.
 
 ## 7. Rischi
 
