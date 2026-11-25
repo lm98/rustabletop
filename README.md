@@ -4,7 +4,9 @@ Agent-first framework for turning tabletop game data into printable and digital 
 Rendering is delegated to an embedded [Typst](https://typst.app); rustabletop owns schema validation,
 instance expansion, imposition and export.
 
-Status: **M2.6 (`board`, grids, tile assembly) done** — see the project doc "Decisioni v0.1" for scope and milestones.
+**Status: pre-alpha.** The manifest and template format may still change before `v0.1.0`; there are no
+releases yet. Scope, decisions and milestone specs (in Italian) are in [`docs/`](docs/):
+[`Decisioni v0.1.md`](docs/Decisioni%20v0.1.md) is the entry point.
 
 ## A project
 
@@ -142,3 +144,12 @@ cd spike/m0a
 `build.py` renders the same spike through the `typst` Python package, without Rust.
 
 Fonts in `spike/m0a/fonts` and `examples/sigilli/fonts` are Cardo and Fira Sans, under the SIL Open Font License (see the `OFL-*.txt` files).
+
+## License
+
+Licensed under either of [Apache License, Version 2.0](LICENSE-APACHE) or [MIT license](LICENSE-MIT)
+at your option.
+
+Unless you explicitly state otherwise, any contribution intentionally submitted for inclusion in this
+project by you, as defined in the Apache-2.0 license, shall be dual licensed as above, without any
+additional terms or conditions.
