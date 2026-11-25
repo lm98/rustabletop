@@ -1,0 +1,17 @@
+- id: dawn-scout
+  name: Dawn Scout
+  suit: sun
+  value: 2
+  qty: 2
+  text: 'Draw a card. If it shows :sun:, take another turn.'
+- id: night-watch
+  name: Night Watch
+  suit: moon
+  value: 5
+  qty: 2
+  text: 'Discard a :moon: card to cancel an attack against you.'
+- id: eclipse
+  name: Eclipse
+  suit: moon
+  value: 9
+  text: 'Counts as both :sun: and :moon:. When you play it, every other player discards a card.'

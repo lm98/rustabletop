@@ -13,13 +13,12 @@ use typst::layout::PageRanges;
 use typst::utils::PicoStr;
 use typst_layout::PagedDocument;
 use typst_pdf::PdfOptions;
-use typst_render::RenderOptions;
 
 use crate::board::{self, Board, TileLayout};
 use crate::component::{BoardMode, Kind};
 use crate::diagnostics::{Diagnostic, Subject};
 use crate::impose::{self, Layout, Page, Sheet};
-use crate::project::{self, Component, Project};
+use crate::project::{self, Component, Instance, Project};
 use crate::schema::{self, Format};
 use crate::world::ProjectWorld;
 
@@ -27,10 +26,20 @@ const MAIN: &str = "/.rtt/main.typ";
 const DATA: &str = "/.rtt/build.json";
 const FACE_LABEL: &str = "rtt-face";
 const OVERFLOW_LABEL: &str = "rtt-overflow";
+const ART_LABEL: &str = "rtt-art";
+const MIN_DPI: f64 = 200.0;
 
 pub struct BuildOptions {
     pub out: PathBuf,
     pub ppi: f32,
+    pub draft: bool,
+}
+
+pub struct RenderOptions {
+    pub out: PathBuf,
+    pub ppi: f32,
+    pub face: Option<String>,
+    pub draft: bool,
 }
 
 #[derive(Debug, Serialize)]
@@ -52,7 +61,10 @@ pub fn build(root: &Path, options: &BuildOptions) -> Result<Built> {
     };
 
     let plan = match Plan::new(&project) {
-        Ok(plan) => plan,
+        Ok(plan) => Plan {
+            draft: options.draft,
+            ..plan
+        },
         Err(errors) => {
             diagnostics.extend(errors);
             return Ok(Built {
@@ -78,7 +90,7 @@ pub fn build(root: &Path, options: &BuildOptions) -> Result<Built> {
             });
         }
     };
-    diagnostics.extend(overflows(&project, &document));
+    diagnostics.extend(introspect(&project, &document));
 
     let sheets = plan.pages.len();
     let pdf = match pdf(&world, &document, sheets) {
@@ -96,19 +108,173 @@ pub fn build(root: &Path, options: &BuildOptions) -> Result<Built> {
     let mut artifacts = Vec::new();
     fs::create_dir_all(&options.out)
         .with_context(|| format!("cannot create {}", options.out.display()))?;
-    let pdf_path = options.out.join(format!("{}-pnp.pdf", project.game));
+    let suffix = if options.draft { "-draft" } else { "" };
+    let pdf_path = options
+        .out
+        .join(format!("{}-pnp{suffix}.pdf", project.game));
     fs::write(&pdf_path, pdf)?;
     artifacts.push(pdf_path.display().to_string());
+    artifacts.extend(write_previews(
+        &project,
+        &plan,
+        &document,
+        sheets,
+        &options.out,
+        options.ppi,
+    )?);
 
-    let render = RenderOptions {
-        pixel_per_pt: f64::from(options.ppi / 72.0).into(),
-        ..RenderOptions::default()
+    Ok(Built {
+        ok: !diagnostics.iter().any(Diagnostic::is_error),
+        artifacts,
+        diagnostics,
+    })
+}
+
+pub fn render(root: &Path, target: &str, options: &RenderOptions) -> Result<Built> {
+    let inspected = project::inspect(root);
+    let mut diagnostics = inspected.diagnostics;
+    let failed = |diagnostics| Built {
+        ok: false,
+        artifacts: Vec::new(),
+        diagnostics,
     };
-    for (page, preview) in document.pages().iter().skip(sheets).zip(&plan.previews) {
+    let Some(project) = inspected.project else {
+        return Ok(failed(diagnostics));
+    };
+    let (index, item, faces) = match resolve_target(&project, target, options.face.as_deref()) {
+        Ok(found) => found,
+        Err(error) => {
+            diagnostics.push(error);
+            return Ok(failed(diagnostics));
+        }
+    };
+
+    let mut plan = Plan::preview(&project, index, item, &faces);
+    plan.draft = options.draft;
+    plan.only = Some(index);
+    let world = plan.world(&project)?;
+    let document = match crate::compile(&world) {
+        Ok(compiled) => {
+            diagnostics.extend(compiled.warnings);
+            compiled.document
+        }
+        Err(errors) => {
+            diagnostics.extend(errors);
+            return Ok(failed(diagnostics));
+        }
+    };
+    diagnostics.extend(introspect(&project, &document));
+    let artifacts = write_previews(&project, &plan, &document, 0, &options.out, options.ppi)?;
+    Ok(Built {
+        ok: !diagnostics.iter().any(Diagnostic::is_error),
+        artifacts,
+        diagnostics,
+    })
+}
+
+fn resolve_target(
+    project: &Project,
+    target: &str,
+    face: Option<&str>,
+) -> Result<(usize, usize, Vec<&'static str>), Diagnostic> {
+    let (component_id, instance_id) = match target.split_once('/') {
+        Some((c, i)) => (c, Some(i)),
+        None => (target, None),
+    };
+    let unknown = |message: String, hints: Vec<String>| {
+        Diagnostic::error("render.target", message).hints(hints)
+    };
+    let ids: Vec<String> = project.components.iter().map(|c| c.id.clone()).collect();
+    let Some(index) = project.components.iter().position(|c| c.id == component_id) else {
+        return Err(unknown(
+            format!("no component `{component_id}`"),
+            schema::suggest(component_id, &ids)
+                .into_iter()
+                .chain([format!("components: {}", ids.join(", "))])
+                .collect(),
+        ));
+    };
+    let component = &project.components[index];
+    let subject = |instance: Option<&str>| Subject {
+        component: Some(component.id.clone()),
+        instance: instance.map(str::to_owned),
+        ..Subject::default()
+    };
+    let instances: Vec<String> = component.instances.iter().map(|i| i.id.clone()).collect();
+    let item = match instance_id {
+        None if instances.len() == 1 => 0,
+        None => {
+            return Err(unknown(
+                format!(
+                    "`{component_id}` has {} instances: name one",
+                    instances.len()
+                ),
+                vec![format!(
+                    "use `{component_id}/<instance>`, e.g. `{component_id}/{}`",
+                    instances.first().map_or("…", String::as_str)
+                )],
+            )
+            .about(subject(None)));
+        }
+        Some(id) => match instances.iter().position(|i| i == id) {
+            Some(item) => item,
+            None => {
+                let listed: Vec<&str> = instances.iter().take(12).map(String::as_str).collect();
+                let more = if instances.len() > listed.len() {
+                    ", …"
+                } else {
+                    ""
+                };
+                return Err(unknown(
+                    format!("`{component_id}` has no valid instance `{id}`"),
+                    schema::suggest(id, &instances)
+                        .into_iter()
+                        .chain([format!("instances: {}{more}", listed.join(", "))])
+                        .collect(),
+                )
+                .about(subject(Some(id))));
+            }
+        },
+    };
+    let available = component.face_names();
+    let faces = match face {
+        None => available,
+        Some(face) => match available.iter().find(|f| **f == face) {
+            Some(f) => vec![*f],
+            None => {
+                let names: Vec<String> = available.iter().map(|f| (*f).to_owned()).collect();
+                return Err(unknown(
+                    format!("`{component_id}` has no face `{face}`"),
+                    schema::suggest(face, &names)
+                        .into_iter()
+                        .chain([format!("faces: {}", names.join(", "))])
+                        .collect(),
+                )
+                .about(subject(Some(&component.instances[item].id))));
+            }
+        },
+    };
+    Ok((index, item, faces))
+}
+
+fn write_previews(
+    project: &Project,
+    plan: &Plan,
+    document: &PagedDocument,
+    skip: usize,
+    out: &Path,
+    ppi: f32,
+) -> Result<Vec<String>> {
+    let render = typst_render::RenderOptions {
+        pixel_per_pt: f64::from(ppi / 72.0).into(),
+        ..typst_render::RenderOptions::default()
+    };
+    let mut artifacts = Vec::new();
+    for (page, preview) in document.pages().iter().skip(skip).zip(&plan.previews) {
         let component = &project.components[preview.component];
         let instance = &component.instances[preview.item];
-        let dir = options.out.join(&component.id);
-        fs::create_dir_all(&dir)?;
+        let dir = out.join(&component.id);
+        fs::create_dir_all(&dir).with_context(|| format!("cannot create {}", dir.display()))?;
         let path = dir.join(format!("{}-{}.png", instance.id, preview.face));
         let png = typst_render::render(page, &render)
             .encode_png()
@@ -116,12 +282,7 @@ pub fn build(root: &Path, options: &BuildOptions) -> Result<Built> {
         fs::write(&path, png)?;
         artifacts.push(path.display().to_string());
     }
-
-    Ok(Built {
-        ok: !diagnostics.iter().any(Diagnostic::is_error),
-        artifacts,
-        diagnostics,
-    })
+    Ok(artifacts)
 }
 
 fn pdf(
@@ -155,6 +316,9 @@ pub struct Plan {
     components: Vec<Value>,
     pages: Vec<Page>,
     previews: Vec<Preview>,
+    draft: bool,
+    #[serde(skip)]
+    only: Option<usize>,
 }
 
 impl Plan {
@@ -246,7 +410,26 @@ impl Plan {
             components,
             pages,
             previews,
+            draft: false,
+            only: None,
         })
+    }
+
+    fn preview(project: &Project, component: usize, item: usize, faces: &[&'static str]) -> Self {
+        Self {
+            components: project.components.iter().map(component_data).collect(),
+            pages: Vec::new(),
+            previews: faces
+                .iter()
+                .map(|face| Preview {
+                    component,
+                    item,
+                    face,
+                })
+                .collect(),
+            draft: false,
+            only: None,
+        }
     }
 
     pub fn page_count(&self) -> usize {
@@ -282,7 +465,8 @@ impl Plan {
             .collect();
         let mut world = ProjectWorld::virtual_main(&project.root, MAIN, &fonts)?;
         world.set_icons(&project.icons);
-        world.add_file(MAIN, main_source(project))?;
+        world.set_draft(self.draft);
+        world.add_file(MAIN, main_source(project, self.only))?;
         world.add_file(DATA, serde_json::to_vec(self)?)?;
         Ok(world)
     }
@@ -345,17 +529,22 @@ fn component_data(component: &Component) -> Value {
     })
 }
 
-fn main_source(project: &Project) -> String {
+fn main_source(project: &Project, only: Option<usize>) -> String {
     let mut src = String::new();
     let mut faces = String::new();
     for (i, component) in project.components.iter().enumerate() {
         let mut entry = String::new();
-        for (face, path) in &component.faces {
+        let included = only.is_none_or(|o| o == i);
+        for (face, path) in component.faces.iter().filter(|_| included) {
             let alias = format!("rtt-face-{i}-{face}");
             let _ = writeln!(src, "#import {:?}: {face} as {alias}", format!("/{path}"));
             let _ = write!(entry, "{face}: {alias}, ");
         }
-        let _ = write!(faces, "({entry}), ");
+        let _ = write!(
+            faces,
+            "({entry}{}), ",
+            if entry.is_empty() { ":" } else { "" }
+        );
     }
     let _ = writeln!(src, "#let rtt-faces = ({faces})");
     src.push_str(&MAIN_BODY.replace("{DATA}", DATA));
@@ -422,6 +611,7 @@ const MAIN_BODY: &str = r##"#import "@rtt/std:0.1.0": outline
   item: item,
   grid: c.grid,
   components: rtt-all,
+  draft: rtt-data.draft,
 )
 
 #let rtt-face(ci, k, face) = {
@@ -547,16 +737,17 @@ const MAIN_BODY: &str = r##"#import "@rtt/std:0.1.0": outline
 }
 "##;
 
-fn overflows(project: &Project, document: &PagedDocument) -> Vec<Diagnostic> {
+fn introspect(project: &Project, document: &PagedDocument) -> Vec<Diagnostic> {
     let label = |name: &str| Selector::Label(Label::new(PicoStr::intern(name)).expect("non-empty"));
     let selector = Selector::Or(
-        [label(FACE_LABEL), label(OVERFLOW_LABEL)]
+        [label(FACE_LABEL), label(OVERFLOW_LABEL), label(ART_LABEL)]
             .into_iter()
             .collect(),
     );
     let face_label = Label::new(PicoStr::intern(FACE_LABEL));
+    let art_label = Label::new(PicoStr::intern(ART_LABEL));
 
-    let mut current: Option<Value> = None;
+    let mut current: Option<Face> = None;
     let mut seen = BTreeSet::new();
     let mut diagnostics = Vec::new();
     for element in document.introspector().query(&selector) {
@@ -565,50 +756,156 @@ fn overflows(project: &Project, document: &PagedDocument) -> Vec<Diagnostic> {
         };
         let value = serde_json::to_value(&meta.value).unwrap_or(Value::Null);
         if element.label() == face_label {
-            current = Some(value);
+            current = Face::from_value(&value);
             continue;
         }
         let Some(face) = &current else { continue };
-        let text = |v: &Value, key: &str| v.get(key).and_then(Value::as_str).map(str::to_owned);
-        let (Some(component), Some(item), Some(side)) = (
-            text(face, "component"),
-            text(face, "item"),
-            text(face, "face"),
-        ) else {
-            continue;
-        };
-        let field = text(&value, "field");
-        let size = value
-            .get("size")
-            .and_then(Value::as_f64)
-            .unwrap_or_default();
-        if !seen.insert((component.clone(), item.clone(), side.clone(), field.clone())) {
-            continue;
-        }
-        let instance = project
+        let Some((component, instance)) = project
             .components
             .iter()
-            .find(|c| c.id == component)
-            .and_then(|c| c.instances.iter().find(|i| i.id == item));
-        let what = match &field {
-            Some(f) => format!("`{f}`"),
-            None => format!("a `fit` block on the {side}"),
+            .find(|c| c.id == face.component)
+            .and_then(|c| Some((c, c.instances.iter().find(|i| i.id == face.item)?)))
+        else {
+            continue;
         };
-        let mut diagnostic = Diagnostic::warning(
-            "render.overflow",
-            format!("{what} of {component}/{item} does not fit at {size}pt"),
-        )
-        .at(instance.and_then(|i| i.location(field.as_deref())))
-        .about(Subject {
-            component: Some(component),
-            instance: Some(item),
-            field: field.clone(),
-        })
-        .hint("shorten the text, or lower `min` in the template's `fit`");
-        if field.is_none() {
-            diagnostic = diagnostic.hint("pass `field: \"<name>\"` to `fit` to point at the field");
+        let diagnostic = if element.label() == art_label {
+            low_resolution(project, component, instance, &value)
+        } else {
+            Some(overflow(face, instance, &value))
+        };
+        let Some(diagnostic) = diagnostic else {
+            continue;
+        };
+        let field = diagnostic.subject.as_ref().and_then(|s| s.field.clone());
+        let key = (
+            diagnostic.code,
+            face.component.clone(),
+            face.item.clone(),
+            face.face.clone(),
+            field,
+        );
+        if seen.insert(key) {
+            diagnostics.push(diagnostic);
         }
-        diagnostics.push(diagnostic);
     }
     diagnostics
+}
+
+struct Face {
+    component: String,
+    item: String,
+    face: String,
+}
+
+impl Face {
+    fn from_value(value: &Value) -> Option<Self> {
+        let text = |key: &str| value.get(key).and_then(Value::as_str).map(str::to_owned);
+        Some(Self {
+            component: text("component")?,
+            item: text("item")?,
+            face: text("face")?,
+        })
+    }
+}
+
+fn overflow(face: &Face, instance: &Instance, value: &Value) -> Diagnostic {
+    let field = value
+        .get("field")
+        .and_then(Value::as_str)
+        .map(str::to_owned);
+    let size = value
+        .get("size")
+        .and_then(Value::as_f64)
+        .unwrap_or_default();
+    let what = match &field {
+        Some(f) => format!("`{f}`"),
+        None => format!("a `fit` block on the {}", face.face),
+    };
+    let diagnostic = Diagnostic::warning(
+        "render.overflow",
+        format!(
+            "{what} of {}/{} does not fit at {size}pt",
+            face.component, face.item
+        ),
+    )
+    .at(instance.location(field.as_deref()))
+    .about(Subject {
+        component: Some(face.component.clone()),
+        instance: Some(face.item.clone()),
+        field: field.clone(),
+    })
+    .hint(
+        "shorten the text; lower `min` in the template's `fit` only if the size is still legible",
+    );
+    if field.is_none() {
+        diagnostic.hint("pass `field: \"<name>\"` to `fit` to point at the field")
+    } else {
+        diagnostic
+    }
+}
+
+fn low_resolution(
+    project: &Project,
+    component: &Component,
+    instance: &Instance,
+    value: &Value,
+) -> Option<Diagnostic> {
+    let source = value.get("source").and_then(Value::as_str)?;
+    let rel = source
+        .strip_prefix("path(\"")
+        .and_then(|s| s.strip_suffix("\")"))
+        .unwrap_or(source)
+        .trim_start_matches('/');
+    let extension = Path::new(rel)
+        .extension()
+        .and_then(|e| e.to_str())
+        .map(str::to_ascii_lowercase);
+    if !matches!(extension.as_deref(), Some("png" | "jpg" | "jpeg")) {
+        return None;
+    }
+    let pixels = imagesize::size(project.root.join(rel)).ok()?;
+    let inches = |key: &str| value.get(key).and_then(Value::as_f64).unwrap_or(0.0) / 72.0;
+    let (width, height) = (inches("width"), inches("height"));
+    if width <= 0.0 || height <= 0.0 {
+        return None;
+    }
+    let (x, y) = (pixels.width as f64 / width, pixels.height as f64 / height);
+    let dpi = match value.get("fit").and_then(Value::as_str) {
+        Some("contain") => x.max(y),
+        _ => x.min(y),
+    };
+    if dpi >= MIN_DPI {
+        return None;
+    }
+    let field = schema::formatted_fields(&component.schema)
+        .into_iter()
+        .filter(|(_, format)| *format == Format::Asset)
+        .map(|(name, _)| name)
+        .find(|name| instance.fields.get(name).and_then(Value::as_str) == Some(rel));
+    let what = match &field {
+        Some(f) => format!("`{f}`"),
+        None => format!("`art` image `{rel}`"),
+    };
+    Some(
+        Diagnostic::warning(
+            "render.low-resolution",
+            format!(
+                "{what} of {}/{} prints at {} dpi (needs ≥ {MIN_DPI})",
+                component.id,
+                instance.id,
+                dpi.floor()
+            ),
+        )
+        .at(instance.location(field.as_deref()))
+        .about(Subject {
+            component: Some(component.id.clone()),
+            instance: Some(instance.id.clone()),
+            field,
+        })
+        .hint(format!(
+            "at this size the image should be at least {} × {} px",
+            (width * MIN_DPI).ceil(),
+            (height * MIN_DPI).ceil()
+        )),
+    )
 }

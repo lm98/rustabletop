@@ -3,31 +3,36 @@
 mod board;
 mod build;
 mod component;
+mod describe;
 mod diagnostics;
 mod grid;
 mod impose;
 mod project;
 mod schema;
+mod skill;
 mod source;
+mod starter;
 mod template;
 mod units;
 mod world;
 
 pub use board::{Assembly, Section, Strip, Tile};
-pub use build::{BuildOptions, Built, Plan, build};
+pub use build::{BuildOptions, Built, Plan, RenderOptions, build, render};
 pub use component::{BoardMode, Kind, Orientation, Production, Shape, Sides};
+pub use describe::{Description, describe};
 pub use diagnostics::{Diagnostic, Location, Severity, Subject};
 pub use grid::{Grid, GridType};
 pub use impose::{Cell, Page, Sheet};
 pub use project::{
-    Checked, Component, DuplexEdge, Instance, MANIFEST_FILE, Paper, Print, Project, check,
+    Checked, Component, DuplexEdge, Instance, MANIFEST_FILE, Paper, Print, Project, check, inspect,
 };
+pub use skill::{SKILL_DIR, SKILL_FILES, SkillInstall, SkillStatus, install_skill};
+pub use starter::new_project;
 pub use units::{Length, SIZE_PRESETS, Size};
 pub use world::{ProjectWorld, STD_PACKAGE};
 
 use typst_layout::PagedDocument;
 use typst_pdf::PdfOptions;
-use typst_render::RenderOptions;
 
 pub struct Compiled {
     pub document: PagedDocument,
@@ -63,9 +68,9 @@ pub fn export_pdf(
 }
 
 pub fn export_pngs(document: &PagedDocument, ppi: f32) -> anyhow::Result<Vec<Vec<u8>>> {
-    let options = RenderOptions {
+    let options = typst_render::RenderOptions {
         pixel_per_pt: f64::from(ppi / 72.0).into(),
-        ..RenderOptions::default()
+        ..typst_render::RenderOptions::default()
     };
     document
         .pages()

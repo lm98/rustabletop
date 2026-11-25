@@ -1,0 +1,82 @@
+game: {{game}}
+
+icons:
+  sun: icons/sun.svg
+  moon: icons/moon.svg
+
+print:
+  paper: {{paper}}
+  margin: 5mm
+  duplex-edge: long
+
+components:
+  - id: card
+    kind: card
+    size: poker
+    bleed: 3mm
+    schema:
+      required: [name, suit, value, text]
+      properties:
+        name: { type: string, maxLength: 24 }
+        suit: { enum: [sun, moon] }
+        value: { type: integer, minimum: 1, maximum: 10 }
+        text: { type: string, format: rich-text }
+        art: { type: string, format: asset }
+    faces:
+      front: templates/card.typ
+      back: templates/card.typ
+    data: data/cards.yaml
+    print:
+      sides: duplex
+      crop-marks: true
+
+  - id: marker
+    kind: token
+    shape: hex
+    size: 25mm
+    orientation: pointy
+    bleed: 2mm
+    schema:
+      required: [player, label]
+      properties:
+        player: { enum: [red, blue] }
+        label: { type: string, maxLength: 8 }
+    faces:
+      front: templates/marker.typ
+      back: templates/marker.typ
+    data: data/markers.yaml
+    print:
+      sides: fold
+      cut-lines: true
+
+  - id: board
+    kind: board
+    size: { width: 360mm, height: 250mm }
+    bleed: 3mm
+    schema:
+      required: [title, spaces]
+      properties:
+        title: { type: string, maxLength: 40 }
+        spaces:
+          type: array
+          items:
+            type: object
+            required: [at, terrain]
+            properties:
+              at: { format: grid-cell }
+              terrain: { enum: [forest, water] }
+    faces:
+      front: templates/board.typ
+    fields:
+      title: The Valley
+      spaces:
+        - { at: [2, 1], terrain: forest }
+        - { at: [3, 1], terrain: forest }
+        - { at: [2, 2], terrain: forest }
+        - { at: [5, 3], terrain: water }
+        - { at: [6, 3], terrain: water }
+        - { at: [5, 4], terrain: water }
+    grid: { type: hex, cols: 9, rows: 7, cell: marker, origin: [27mm, 70mm] }
+    print:
+      mode: tiles
+      overlap: 10mm
