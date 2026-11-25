@@ -13,9 +13,16 @@ fail() {
 
 command -v curl >/dev/null 2>&1 || fail "curl is required"
 
+archive="tar.gz"
+exe=""
 case "$(uname -s)-$(uname -m)" in
   Linux-x86_64 | Linux-amd64) target="x86_64-unknown-linux-gnu" ;;
   Darwin-arm64 | Darwin-aarch64) target="aarch64-apple-darwin" ;;
+  MINGW*-x86_64 | MSYS*-x86_64 | CYGWIN*-x86_64)
+    target="x86_64-pc-windows-msvc"
+    archive="zip"
+    exe=".exe"
+    ;;
   *) fail "no prebuilt rustabletop for $(uname -s) $(uname -m)" ;;
 esac
 
@@ -26,17 +33,22 @@ if [ -z "$tag" ]; then
   [ -n "$tag" ] || fail "no release of $repo found"
 fi
 
-url="https://github.com/$repo/releases/download/$tag/rustabletop-$target.tar.gz"
+url="https://github.com/$repo/releases/download/$tag/rustabletop-$target.$archive"
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
-curl -fsSL "$url" -o "$tmp/rustabletop.tar.gz" || fail "cannot download $url"
-tar -xzf "$tmp/rustabletop.tar.gz" -C "$tmp"
+curl -fsSL "$url" -o "$tmp/rustabletop.$archive" || fail "cannot download $url"
+if [ "$archive" = "zip" ]; then
+  unzip -q "$tmp/rustabletop.zip" -d "$tmp" || fail "cannot extract $url (unzip is required)"
+else
+  tar -xzf "$tmp/rustabletop.tar.gz" -C "$tmp"
+fi
 mkdir -p "$bin_dir"
-install -m 755 "$tmp/rustabletop" "$bin_dir/rustabletop"
+cp "$tmp/rustabletop$exe" "$bin_dir/rustabletop$exe"
+chmod 755 "$bin_dir/rustabletop$exe"
 
 echo "installed rustabletop $tag in $bin_dir"
 case ":$PATH:" in
   *":$bin_dir:"*) ;;
   *) echo "add it to PATH: export PATH=\"$bin_dir:\$PATH\"" ;;
 esac
-"$bin_dir/rustabletop" --version
+"$bin_dir/rustabletop$exe" --version

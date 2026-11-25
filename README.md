@@ -10,7 +10,7 @@ instance expansion, imposition and export.
 ## Quick start
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/lm98/rustabletop/main/install.sh | sh   # Linux x86_64, macOS arm64
+curl -fsSL https://raw.githubusercontent.com/lm98/rustabletop/main/install.sh | sh   # Linux x86_64, macOS arm64, Windows x86_64 (Git Bash)
 rustabletop new my-game          # a working card + token + board project, with the Claude skill in .claude/skills/
 rustabletop check my-game        # --json on every command for agents
 rustabletop render card/eclipse my-game   # PNG of one instance, all faces
