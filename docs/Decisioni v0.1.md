@@ -65,6 +65,11 @@ Il valore non sta nel "dati → carte → PDF", già coperto da nanDECK, Squib, 
 - Una **skill Claude** nel repo (`skills/rustabletop/SKILL.md`) descrive formato, stdlib e ciclo di lavoro per **tutti e tre i kind**. Funziona in Claude Code e in qualsiasi sessione con una shell.
 - Il server MCP sarà un adapter sottile sopra `rtt-core`, dopo la v0.1.
 
+### 3.7 Pubblicazione *(25/11/2026)*
+- Repo pubblico (`lm98/rustabletop`). Licenza **MIT OR Apache-2.0**, come da convenzione dell'ecosistema Rust e compatibile con Typst (Apache-2.0); file `LICENSE-MIT` e `LICENSE-APACHE` nella root.
+- I font nei progetti di esempio sono OFL, con il loro file di licenza accanto.
+- Stato dichiarato nel README: pre-alpha, formato non stabile fino a `v0.1.0`.
+
 ## 4. Fuori scope v0.1 (con condizione per riconsiderare)
 
 | Elemento | Riconsiderare quando… |
@@ -132,10 +137,9 @@ Backlog dopo v0.1: watch mode, MCP, forme da SVG, disposizione a nido d'ape degl
 - **Churn dell'API Typst:** versione fissata, upgrade in branch dedicati.
 - **Familiarità degli LLM con Typst inferiore a HTML/SVG:** la stdlib riduce la superficie da scrivere, la skill include esempi completi.
 - **Clip su forme non rettangolari:** verificato in M2.5, Typst 0.15.1 non ha clip su path arbitrario (solo `radius` sui box). Si usa il clip rettangolare sul riquadro + bleed e la linea di taglio sul contorno.
-- **Nome del binario `rtt`:** collide con RTT (Real-Time Transfer, ecosistema embedded/probe-rs). Da rivedere prima della pubblicazione.
+- **Nome del binario `rtt`:** collide con RTT (Real-Time Transfer, ecosistema embedded/probe-rs). Il repo è pubblico dal 25/11/2026: va deciso prima della prima release (`v0.1.0-alpha.1`, fine M3), perché dopo il nome finisce in skill, script di installazione e progetti generati.
 
 ## 8. Questioni aperte
 
 - **Template dichiarativi in futuro?** Valutare solo se i template Typst si rivelano un collo di bottiglia per l'agente (misurabile in M3).
 - **Asset e illustrazioni:** in parte risolta da `format: asset` (M2): file verificato dal check, segnaposto se il campo opzionale manca. Restano da definire le versioni per stampa e TTS.
-- **Licenza:** il workspace dichiara MIT OR Apache-2.0 (Typst è Apache-2.0). Da confermare prima della pubblicazione.

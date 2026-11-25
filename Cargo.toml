@@ -6,6 +6,7 @@ members = ["crates/rtt-core", "crates/rtt-cli"]
 version = "0.0.1"
 edition = "2024"
 license = "MIT OR Apache-2.0"
+repository = "https://github.com/lm98/rustabletop"
 
 [workspace.dependencies]
 typst = "=0.15.1"

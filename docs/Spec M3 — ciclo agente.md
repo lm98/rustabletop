@@ -121,8 +121,8 @@ M3 aggiunge solo `ctx.draft` (§6). Tutto il resto del formato resta invariato.
 ## 8. Distribuzione del binario
 
 - Workflow di **release** su tag `v*`: compila `rtt` per Linux x86_64 e macOS aarch64 (Windows facoltativo) e pubblica gli archivi nella release di GitHub.
-- `install.sh` nella root del repo: scarica il binario della piattaforma corrente in `~/.local/bin`. Usa `gh release download` se `gh` è autenticato, altrimenti `curl` sulla URL pubblica.
-- **Vincolo: il repo è privato.** Gli asset delle release di un repo privato non si scaricano senza autenticazione. Finché il repo resta privato, l'installazione funziona solo dove `gh` ha accesso al repo (come le sessioni Claude collegate). Il percorso con `curl` funzionerà quando il repo diventerà pubblico.
+- `install.sh` nella root del repo: scarica con `curl` il binario della piattaforma corrente dall'ultima release pubblica e lo installa in `~/.local/bin`. Il repo è pubblico dal 25/11/2026, quindi non serve autenticazione. Uso previsto nella skill: `curl -fsSL https://raw.githubusercontent.com/lm98/rustabletop/main/install.sh | sh`.
+- Lo script deve fallire con un messaggio chiaro se la piattaforma non è supportata o se non esiste ancora una release, indicando il ripiego `cargo install`.
 - La skill riporta l'installazione in una riga, più il ripiego `cargo install --git … rtt-cli`, che richiede circa 8 minuti.
 - Prima release: `v0.1.0-alpha.1`, alla chiusura di M3.
 
