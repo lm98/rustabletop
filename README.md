@@ -4,9 +4,23 @@ Agent-first framework for turning tabletop game data into printable and digital 
 Rendering is delegated to an embedded [Typst](https://typst.app); rustabletop owns schema validation,
 instance expansion, imposition and export.
 
-**Status: pre-alpha.** The manifest and template format may still change before `v0.1.0`; there are no
-releases yet. Scope, decisions and milestone specs (in Italian) are in [`docs/`](docs/):
+**Status: pre-alpha.** The manifest and template format may still change before `v0.1.0`. Scope, decisions and milestone specs (in Italian) are in [`docs/`](docs/):
 [`Decisioni v0.1.md`](docs/Decisioni%20v0.1.md) is the entry point.
+
+## Quick start
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/lm98/rustabletop/main/install.sh | sh   # Linux x86_64, macOS arm64
+rustabletop new my-game          # a working card + token + board project, with the Claude skill in .claude/skills/
+rustabletop check my-game        # --json on every command for agents
+rustabletop render card/eclipse my-game   # PNG of one instance, all faces
+rustabletop build my-game        # my-game/out/my-game-pnp.pdf (+ --draft for an ink-saving proof)
+```
+
+Other platforms: `cargo install --git https://github.com/lm98/rustabletop rustabletop` (~8 minutes).
+`rustabletop schema <project> --json` describes an existing project; `rustabletop skill install --dir <project>`
+adds the skill ([`skills/rustabletop/`](skills/rustabletop/SKILL.md)) to one. Releases also ship
+`rustabletop-skill.zip` for claude.ai.
 
 ## A project
 
@@ -67,14 +81,15 @@ Backgrounds should overflow the contour, as for cards.
 ```
 
 - `item`: the validated record; every declared field is present (`none` when absent). `format: asset` fields arrive as paths.
-- `ctx`: `(kind, shape: (type, orientation, width, height, radius, inscribed), trim: (width, height), bleed, component, face, item, grid, components)`.
+- `ctx`: `(kind, shape: (type, orientation, width, height, radius, inscribed), trim: (width, height), bleed, component, face, item, grid, components, draft)`.
   `ctx.components` maps every component id to its `(kind, shape, trim, bleed)`, e.g. `ctx.components.unit-card.trim`.
 - `rich(text)` replaces `:name:` with the icons declared in the manifest without changing line spacing.
 - `fit(body, max: 9pt, min: 5.5pt, field: none)` shrinks text to its container; if it does not fit at `min`,
   `rustabletop build` reports `render.overflow` at the record (at the field, when `field` is given).
 - `safe-area(ctx, inset:)` places content in the largest rectangle inscribed in the shape, shrunk by `inset`.
 - `outline(ctx, inset:, ..args)` draws the shape's contour shrunk by `inset` (`fill`, `stroke` as for `rect`).
-- `icon-image(name, ..args)` is a declared icon as a free-standing image; `art(path, placeholder:)` shows an image or a placeholder.
+- `icon-image(name, ..args)` is a declared icon as a free-standing image; `art(path, placeholder:)` shows an image or a placeholder
+  (only an outline when `ctx.draft` is true); PNG/JPEG images printed below 200 dpi produce `render.low-resolution`.
 - `draw-grid(grid, stroke:, fill:, inset:, cell:)` draws `ctx.grid`; `fill` and `cell` may be functions of `(col, row)`.
   `cell-center(grid, col, row)` and `cells(grid)` give centres in canvas coordinates (bleed included); `cell-shape(grid, ..args)` is one cell's outline.
 
@@ -126,7 +141,9 @@ unknown keywords are rejected and records reject undeclared fields by default.
 ```
 crates/rustabletop-core   manifest + data loading with source positions, schema validation, imposition, build (generated Typst main + virtual JSON data), Typst World (project-confined files, project fonts only, embedded `@rtt/std`), PDF/PNG export, diagnostics
 crates/rustabletop-core/typst/std   the `@rtt/std` Typst package, embedded in the binary
-crates/rustabletop    `rustabletop` binary (`check`, `build`, low-level `render`)
+crates/rustabletop-core/starter   the project written by `rustabletop new`, embedded in the binary
+crates/rustabletop    `rustabletop` binary (`new`, `schema`, `check`, `render`, `build`, `skill install`, hidden low-level `typst`)
+skills/rustabletop    the Claude skill, embedded in the binary and written by `new` / `skill install`
 examples/sigilli  reference project
 spike/m0a         pure-Typst print-and-play spike: card.typ (faces), pnp.typ (imposition), cards.typ (one card per page)
 ```
@@ -136,9 +153,9 @@ spike/m0a         pure-Typst print-and-play spike: card.typ (faces), pnp.typ (im
 ```sh
 cargo build --release
 cd spike/m0a
-../../target/release/rustabletop render pnp.typ --font-path fonts --out out
-../../target/release/rustabletop render cards.typ -f png --font-path fonts --out out --input id=ash-titan
-../../target/release/rustabletop render pnp.typ --font-path fonts --input data=cards.csv --json
+../../target/release/rustabletop typst pnp.typ --font-path fonts --out out
+../../target/release/rustabletop typst cards.typ -f png --font-path fonts --out out --input id=ash-titan
+../../target/release/rustabletop typst pnp.typ --font-path fonts --input data=cards.csv --json
 ```
 
 `build.py` renders the same spike through the `typst` Python package, without Rust.

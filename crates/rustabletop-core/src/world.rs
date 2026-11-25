@@ -27,6 +27,7 @@ pub struct ProjectWorld {
     overlay: HashMap<FileId, Bytes>,
     std: PackageSpec,
     icons: HashMap<String, PathBuf>,
+    draft: bool,
 }
 
 impl ProjectWorld {
@@ -87,6 +88,7 @@ impl ProjectWorld {
             overlay: HashMap::new(),
             std: STD_PACKAGE.parse().expect("valid package spec"),
             icons: HashMap::new(),
+            draft: false,
         })
     }
 
@@ -107,6 +109,10 @@ impl ProjectWorld {
             .iter()
             .map(|(name, path)| (icon_file(name, path), self.root.join(path)))
             .collect();
+    }
+
+    pub fn set_draft(&mut self, draft: bool) {
+        self.draft = draft;
     }
 
     fn icons_module(&self) -> String {
@@ -137,6 +143,7 @@ impl ProjectWorld {
             "/typst.toml" => Ok(Bytes::from_string(STD_MANIFEST)),
             "/lib.typ" => Ok(Bytes::from_string(STD_LIB)),
             "/icons.typ" => Ok(Bytes::from_string(self.icons_module())),
+            "/mode.typ" => Ok(Bytes::from_string(format!("#let draft = {}\n", self.draft))),
             _ => {
                 let real = path
                     .strip_prefix(ICON_DIR)

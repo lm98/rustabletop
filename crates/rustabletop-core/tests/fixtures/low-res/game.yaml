@@ -1,0 +1,13 @@
+game: fixture
+components:
+  - id: hero
+    kind: card
+    size: poker
+    schema:
+      required: [name]
+      properties:
+        name: { type: string }
+        art: { type: string, format: asset }
+    faces:
+      front: face.typ
+    data: data.yaml

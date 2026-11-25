@@ -1,0 +1,8 @@
+- id: small
+  name: Small
+  art: art/small.png
+- id: large
+  name: Large
+  art: art/large.png
+- id: none
+  name: None

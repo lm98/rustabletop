@@ -1,4 +1,5 @@
 #import "icons.typ": icons
+#import "mode.typ": draft
 
 #let icon(name, size: 0.84em) = box(width: 1em, height: 0.62em,
   place(center + horizon, image(icons.at(name), height: size)))
@@ -66,11 +67,16 @@
 }
 
 #let art(source, width: 100%, height: 100%, fit: "cover", fill: luma(225), placeholder: none) = {
-  if source == none {
-    rect(width: width, height: height, fill: fill, stroke: none,
-      align(center + horizon, text(size: 7pt, fill: luma(110), placeholder)))
+  let note = align(center + horizon, text(size: 7pt, fill: luma(110), placeholder))
+  if draft {
+    rect(width: width, height: height, fill: none, stroke: 0.5pt + luma(140), note)
+  } else if source == none {
+    rect(width: width, height: height, fill: fill, stroke: none, note)
   } else {
-    image(source, width: width, height: height, fit: fit)
+    box(width: width, height: height, layout(area => {
+      place([#metadata((source: source, width: area.width.pt(), height: area.height.pt(), fit: fit)) <rtt-art>])
+      image(source, width: 100%, height: 100%, fit: fit)
+    }))
   }
 }
 

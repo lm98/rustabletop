@@ -54,7 +54,7 @@ impl Kind {
         }
     }
 
-    fn print_options(self) -> &'static [&'static str] {
+    pub(crate) fn print_options(self) -> &'static [&'static str] {
         match self {
             Kind::Card => &["sides", "crop-marks"],
             Kind::Token => &["sides", "cut-lines", "gap"],

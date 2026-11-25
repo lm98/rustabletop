@@ -49,6 +49,7 @@ fn build_into(root: &Path, out: &Path) -> Built {
         &BuildOptions {
             out: out.to_path_buf(),
             ppi: 20.0,
+            draft: false,
         },
     )
     .unwrap()

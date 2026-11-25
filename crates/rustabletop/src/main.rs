@@ -19,12 +19,82 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Command {
+    /// Create a working starter project (card, token, board) in a new directory
+    New(NewArgs),
+    /// Describe a project: components, shapes, print options, effective schemas
+    Schema(SchemaArgs),
     /// Validate a project's manifest, schemas and data
     Check(CheckArgs),
-    /// Check, then render the print-and-play PDF and one PNG per card face
-    Build(BuildArgs),
-    /// Compile a raw Typst file (low-level, used by spikes)
+    /// Render one instance to PNG, one image per face
     Render(RenderArgs),
+    /// Check, then render the print-and-play PDF and one PNG per face
+    Build(BuildArgs),
+    /// Manage the rustabletop skill for Claude Code
+    Skill {
+        #[command(subcommand)]
+        command: SkillCommand,
+    },
+    /// Compile a raw Typst file (low-level, used by spikes)
+    #[command(hide = true)]
+    Typst(TypstArgs),
+}
+
+#[derive(Subcommand)]
+enum SkillCommand {
+    /// Write the skill into <DIR>/.claude/skills/rustabletop/, replacing other versions
+    Install(SkillInstallArgs),
+}
+
+#[derive(clap::Args)]
+struct SkillInstallArgs {
+    #[arg(long, default_value = ".")]
+    dir: PathBuf,
+    #[arg(long)]
+    json: bool,
+}
+
+#[derive(Clone, Copy, ValueEnum)]
+enum PaperArg {
+    A4,
+    Letter,
+}
+
+#[derive(clap::Args)]
+struct NewArgs {
+    dir: PathBuf,
+    #[arg(long, value_enum, default_value = "a4")]
+    paper: PaperArg,
+    #[arg(long)]
+    json: bool,
+}
+
+#[derive(clap::Args)]
+struct SchemaArgs {
+    #[arg(default_value = ".")]
+    project: PathBuf,
+    #[arg(long)]
+    json: bool,
+}
+
+#[derive(clap::Args)]
+struct RenderArgs {
+    /// `<component>/<instance>`, or `<component>` when it has a single instance
+    target: String,
+    #[arg(default_value = ".")]
+    project: PathBuf,
+    /// Render only this face [default: all faces]
+    #[arg(long)]
+    face: Option<String>,
+    /// Output directory [default: <PROJECT>/out/render]
+    #[arg(long, short)]
+    out: Option<PathBuf>,
+    #[arg(long, default_value_t = 150.0)]
+    ppi: f32,
+    /// Draft mode: `ctx.draft` is true and `art` draws outlines only
+    #[arg(long)]
+    draft: bool,
+    #[arg(long)]
+    json: bool,
 }
 
 #[derive(clap::Args)]
@@ -46,6 +116,9 @@ struct BuildArgs {
     out: Option<PathBuf>,
     #[arg(long, default_value_t = 300.0)]
     ppi: f32,
+    /// Draft mode: `ctx.draft` is true, `art` draws outlines only, the PDF ends in `-draft`
+    #[arg(long)]
+    draft: bool,
 }
 
 #[derive(Clone, Copy, ValueEnum)]
@@ -55,7 +128,7 @@ enum Format {
 }
 
 #[derive(clap::Args)]
-struct RenderArgs {
+struct TypstArgs {
     entry: PathBuf,
     #[arg(long, default_value = ".")]
     root: PathBuf,
@@ -82,9 +155,15 @@ fn parse_key_value(s: &str) -> Result<(String, String), String> {
 fn main() -> ExitCode {
     let cli = Cli::parse();
     match cli.command {
+        Command::New(args) => new(&args),
+        Command::Schema(args) => schema(&args),
         Command::Check(args) => check(&args),
+        Command::Render(args) => render(&args),
         Command::Build(args) => build(&args),
-        Command::Render(args) => match render(&args) {
+        Command::Skill {
+            command: SkillCommand::Install(args),
+        } => skill_install(&args),
+        Command::Typst(args) => match typst(&args) {
             Ok(report) => {
                 emit(&report, args.json);
                 if report.ok {
@@ -120,6 +199,105 @@ struct ComponentSummary {
     id: String,
     instances: usize,
     copies: u64,
+}
+
+fn new(args: &NewArgs) -> ExitCode {
+    let paper = match args.paper {
+        PaperArg::A4 => rustabletop_core::Paper::A4,
+        PaperArg::Letter => rustabletop_core::Paper::Letter,
+    };
+    match rustabletop_core::new_project(&args.dir, paper) {
+        Ok(files) => {
+            if args.json {
+                let report = serde_json::json!({ "ok": true, "files": files });
+                println!(
+                    "{}",
+                    serde_json::to_string_pretty(&report).expect("report is serializable")
+                );
+            } else {
+                for file in &files {
+                    println!("{file}");
+                }
+                println!(
+                    "ok: created {} ({} files); next: rustabletop check {0}",
+                    args.dir.display(),
+                    files.len()
+                );
+            }
+            ExitCode::SUCCESS
+        }
+        Err(e) => {
+            if args.json {
+                let report = serde_json::json!({ "ok": false, "error": format!("{e:#}") });
+                println!(
+                    "{}",
+                    serde_json::to_string_pretty(&report).expect("report is serializable")
+                );
+            } else {
+                eprintln!("error: {e:#}");
+            }
+            ExitCode::FAILURE
+        }
+    }
+}
+
+fn skill_install(args: &SkillInstallArgs) -> ExitCode {
+    match rustabletop_core::install_skill(&args.dir) {
+        Ok(installed) => {
+            if args.json {
+                println!(
+                    "{}",
+                    serde_json::to_string_pretty(&installed).expect("report is serializable")
+                );
+            } else {
+                let (version, dir) = (installed.version, &installed.dir);
+                match installed.status {
+                    rustabletop_core::SkillStatus::Created => {
+                        println!("ok: installed skill {version} in {dir}");
+                    }
+                    rustabletop_core::SkillStatus::Unchanged => {
+                        println!("ok: skill {version} already installed in {dir}");
+                    }
+                    rustabletop_core::SkillStatus::Updated => {
+                        println!("ok: replaced a different skill version with {version} in {dir}");
+                    }
+                }
+            }
+            ExitCode::SUCCESS
+        }
+        Err(e) => {
+            eprintln!("error: {e:#}");
+            ExitCode::FAILURE
+        }
+    }
+}
+
+fn schema(args: &SchemaArgs) -> ExitCode {
+    let description = rustabletop_core::describe(&args.project);
+    if args.json {
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&description).expect("report is serializable")
+        );
+    } else {
+        for d in &description.diagnostics {
+            eprintln!("{d}\n");
+        }
+        print!("{}", description.summary());
+        if !description.ok {
+            let errors = description
+                .diagnostics
+                .iter()
+                .filter(|d| d.is_error())
+                .count();
+            println!("\nincomplete: {errors} error(s), run `rustabletop check` for details");
+        }
+    }
+    if description.ok {
+        ExitCode::SUCCESS
+    } else {
+        ExitCode::FAILURE
+    }
 }
 
 fn check(args: &CheckArgs) -> ExitCode {
@@ -179,7 +357,11 @@ fn check(args: &CheckArgs) -> ExitCode {
 
 fn build(args: &BuildArgs) -> ExitCode {
     let out = args.out.clone().unwrap_or_else(|| args.project.join("out"));
-    let options = rustabletop_core::BuildOptions { out, ppi: args.ppi };
+    let options = rustabletop_core::BuildOptions {
+        out,
+        ppi: args.ppi,
+        draft: args.draft,
+    };
     let built = match rustabletop_core::build(&args.project, &options) {
         Ok(built) => built,
         Err(e) => {
@@ -187,7 +369,30 @@ fn build(args: &BuildArgs) -> ExitCode {
             return ExitCode::from(2);
         }
     };
-    if args.json {
+    report_built(&built, args.json)
+}
+
+fn render(args: &RenderArgs) -> ExitCode {
+    let options = rustabletop_core::RenderOptions {
+        out: args
+            .out
+            .clone()
+            .unwrap_or_else(|| args.project.join("out").join("render")),
+        ppi: args.ppi,
+        face: args.face.clone(),
+        draft: args.draft,
+    };
+    match rustabletop_core::render(&args.project, &args.target, &options) {
+        Ok(built) => report_built(&built, args.json),
+        Err(e) => {
+            eprintln!("error: {e:#}");
+            ExitCode::from(2)
+        }
+    }
+}
+
+fn report_built(built: &rustabletop_core::Built, json: bool) -> ExitCode {
+    if json {
         println!(
             "{}",
             serde_json::to_string_pretty(&built).expect("report is serializable")
@@ -199,8 +404,13 @@ fn build(args: &BuildArgs) -> ExitCode {
         let errors = built.diagnostics.iter().filter(|d| d.is_error()).count();
         let warnings = built.diagnostics.len() - errors;
         if built.ok {
-            if let Some(pdf) = built.artifacts.first() {
-                println!("{pdf}");
+            for artifact in built.artifacts.iter().filter(|a| a.ends_with(".pdf")) {
+                println!("{artifact}");
+            }
+            if built.artifacts.len() <= 4 {
+                for artifact in built.artifacts.iter().filter(|a| a.ends_with(".png")) {
+                    println!("{artifact}");
+                }
             }
             println!(
                 "ok: {} artifact(s), {warnings} warning(s)",
@@ -224,7 +434,7 @@ struct Report {
     diagnostics: Vec<Diagnostic>,
 }
 
-fn render(args: &RenderArgs) -> Result<Report> {
+fn typst(args: &TypstArgs) -> Result<Report> {
     let world = ProjectWorld::new(
         &args.root,
         &args.entry,

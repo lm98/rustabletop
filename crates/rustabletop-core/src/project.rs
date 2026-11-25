@@ -167,6 +167,15 @@ impl Checked {
 }
 
 pub fn check(root: &Path) -> Checked {
+    let inspected = inspect(root);
+    let ok = inspected.ok();
+    Checked {
+        project: inspected.project.filter(|_| ok),
+        diagnostics: inspected.diagnostics,
+    }
+}
+
+pub fn inspect(root: &Path) -> Checked {
     let mut diagnostics = Vec::new();
     let project = load(root, &mut diagnostics);
     diagnostics.sort_by(|a, b| {
@@ -177,9 +186,8 @@ pub fn check(root: &Path) -> Checked {
         };
         key(a).cmp(&key(b))
     });
-    let ok = !diagnostics.iter().any(Diagnostic::is_error);
     Checked {
-        project: project.filter(|_| ok),
+        project,
         diagnostics,
     }
 }
@@ -865,4 +873,37 @@ fn serde_path_pointer(path: &serde_path_to_error::Path) -> String {
         Segment::Enum { variant } => pointer_push(&acc, variant),
         Segment::Unknown => acc,
     })
+}
+
+#[cfg(test)]
+pub(crate) fn manifest_keys() -> Vec<String> {
+    use serde::de::DeserializeOwned;
+
+    fn fields<T: DeserializeOwned>() -> Vec<String> {
+        let probe = serde_json::json!({ "rtt-probe": 0 });
+        let message = serde_json::from_value::<T>(probe)
+            .err()
+            .expect("the probe key is rejected")
+            .to_string();
+        let expected = message
+            .split_once("expected")
+            .map(|(_, rest)| rest)
+            .unwrap_or_default();
+        expected
+            .split('`')
+            .skip(1)
+            .step_by(2)
+            .map(str::to_owned)
+            .collect()
+    }
+
+    [
+        fields::<ManifestDoc>(),
+        fields::<Print>(),
+        fields::<ComponentDoc>(),
+        fields::<ProductionDoc>(),
+        fields::<GridDoc>(),
+        vec!["width".into(), "height".into()],
+    ]
+    .concat()
 }

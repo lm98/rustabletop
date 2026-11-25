@@ -13,17 +13,19 @@
 #let front(card, ctx) = {
   let color = suits.at(card.suit)
   let inner = ctx.trim.width - 8mm
-  rect(width: 100%, height: 100%, fill: color.lighten(10%), stroke: none)
+  if not ctx.draft {
+    rect(width: 100%, height: 100%, fill: color.lighten(10%), stroke: none)
+  }
   place(top + left, dx: ctx.bleed + 2mm, dy: ctx.bleed + 2mm,
     rect(width: ctx.trim.width - 4mm, height: ctx.trim.height - 4mm, radius: 2mm,
-      fill: parchment, stroke: 0.6pt + color.darken(30%)))
+      fill: if ctx.draft { none } else { parchment }, stroke: 0.6pt + color.darken(30%)))
 
   safe-area(ctx, inset: 4mm, {
     set text(font: "Cardo", fill: ink)
     grid(columns: (1fr, auto), align: (left + horizon, right + horizon),
       text(size: 10pt, weight: "bold", card.name),
-      circle(radius: 3.2mm, fill: color, stroke: 0.5pt + white,
-        align(center + horizon, text(size: 10pt, weight: "bold", fill: white, str(card.cost)))),
+      circle(radius: 3.2mm, fill: if ctx.draft { none } else { color }, stroke: 0.5pt + if ctx.draft { color } else { white },
+        align(center + horizon, text(size: 10pt, weight: "bold", fill: if ctx.draft { ink } else { white }, str(card.cost)))),
     )
 
     place(top + left, dy: 10mm,
@@ -46,9 +48,12 @@
 }
 
 #let back(card, ctx) = {
-  rect(width: 100%, height: 100%, fill: rgb("#1f1a2e"), stroke: none)
+  let accent = if ctx.draft { ink } else { gold }
+  if not ctx.draft {
+    rect(width: 100%, height: 100%, fill: rgb("#1f1a2e"), stroke: none)
+  }
   place(center + horizon,
-    rect(width: ctx.trim.width - 8mm, height: ctx.trim.height - 8mm, radius: 3mm, stroke: 1pt + gold))
+    rect(width: ctx.trim.width - 8mm, height: ctx.trim.height - 8mm, radius: 3mm, stroke: 1pt + accent))
   place(center + horizon,
-    text(font: "Cardo", size: 16pt, fill: gold, tracking: 2pt, smallcaps[Sigilli]))
+    text(font: "Cardo", size: 16pt, fill: accent, tracking: 2pt, smallcaps[Sigilli]))
 }

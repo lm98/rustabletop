@@ -1,0 +1,8 @@
+- id: red-camp
+  player: red
+  label: Camp
+  qty: 4
+- id: blue-camp
+  player: blue
+  label: Camp
+  qty: 4

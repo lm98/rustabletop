@@ -10,18 +10,24 @@
 
 #let front(seal, ctx) = {
   let color = suits.at(seal.suit)
-  rect(width: 100%, height: 100%, fill: color, stroke: none)
-  outline(ctx, inset: 1.2mm, fill: none, stroke: 0.6pt + white)
+  let ink = if ctx.draft { color } else { white }
+  if not ctx.draft {
+    rect(width: 100%, height: 100%, fill: color, stroke: none)
+  }
+  outline(ctx, inset: 1.2mm, fill: none, stroke: 0.6pt + ink)
   safe-area(ctx, inset: 0.5mm, align(center + horizon, {
     icon-image(seal.suit, height: 9mm)
     v(0.6mm, weak: true)
-    text(font: "Cardo", size: 7pt, weight: "bold", fill: white, seal.name)
+    text(font: "Cardo", size: 7pt, weight: "bold", fill: ink, seal.name)
   }))
 }
 
 #let back(seal, ctx) = {
-  rect(width: 100%, height: 100%, fill: rgb("#1f1a2e"), stroke: none)
-  outline(ctx, inset: 1.5mm, fill: none, stroke: 0.8pt + gold)
+  let accent = if ctx.draft { black } else { gold }
+  if not ctx.draft {
+    rect(width: 100%, height: 100%, fill: rgb("#1f1a2e"), stroke: none)
+  }
+  outline(ctx, inset: 1.5mm, fill: none, stroke: 0.8pt + accent)
   safe-area(ctx, align(center + horizon,
-    text(font: "Cardo", size: 16pt, fill: gold, smallcaps[S])))
+    text(font: "Cardo", size: 16pt, fill: accent, smallcaps[S])))
 }
