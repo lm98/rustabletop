@@ -1,6 +1,6 @@
 # rustabletop — Decisioni v0.1
 
-**Stato:** M0–M2.6 completati (M2 PR #2, M2.5 PR #3, M2.6 PR #5; 25/11/2026). M3 in corso sul branch `m3-agent-loop`: implementazione, test tecnici e release di prova (`v0.1.0-alpha.1-test.2`: Linux, macOS, Windows, zip della skill, checksum; `install.sh` verificato) completati. Valutazione §9: 3/3 brief superati senza interventi con check e build puliti (sotto-agenti in cartelle pulite, `docs/evals/m3/`), in attesa della verifica visiva umana, vedi "Spec M3 — ciclo agente.md".
+**Stato:** M0–M3 completati (M2 PR #2, M2.5 PR #3, M2.6 PR #5, M3 branch `m3-agent-loop`; 25/11/2026). M3: release di prova `v0.1.0-alpha.1-test.2` (Linux, macOS, Windows, zip della skill, checksum; `install.sh` verificato); valutazione §9 3/3 brief superati senza interventi, con check e build puliti e verifica visiva approvata (`docs/evals/m3/`). Prossima: M4 (export TTS); prima, la release `v0.1.0-alpha.1`.
 **Sostituisce, per lo scope:** le sezioni 5–6, 9, 11–12 del "Design iniziale". I principi delle sezioni 1–2 restano validi come direzione di lungo periodo.
 
 ---
@@ -93,7 +93,7 @@ Il valore non sta nel "dati → carte → PDF", già coperto da nanDECK, Squib, 
 | **M2** ✅ | Contratto delle facce, `@rtt/std`, dati virtuali, imposition generata, `rustabletop build` (PR #2) | Il mazzo dello spike si ricostruisce dal manifest; overflow e icone sconosciute sono diagnostiche localizzate; build deterministico |
 | **M2.5** ✅ | Modello dei componenti generalizzato + kind `token` | Fatto: carte con lo stesso layout di M2, Sigillo `circle`/`fold` e Vortice `hex` a faccia singola in `examples/sigilli` con linee di taglio, test del fold, `manifest.face` sulle facce sconosciute, rettangolo inscritto testato; build deterministico |
 | **M2.6** ✅ | Kind `board` (tiles / poster, `fields` inline), griglie `hex`/`square` con `format: grid-cell`, geometria condivisa (`ctx.components`, `grid.cell: <id>`), istruzioni di montaggio, linee di taglio a doppia traccia | Fatto: `dungeon-map` 500×350 in `examples/sigilli` con `fields` inline e griglia `hex` da `vortex`, 4 sezioni A4 + pagina di montaggio; test di copertura delle sezioni, `poster`, griglia, `data.grid-cell`, `manifest.grid` con `did you mean`, `back` su `tiles`; doppia traccia verificata sui render; build deterministico |
-| **M3** | Ciclo agente: `rustabletop schema`, `rustabletop render <id>`, `rustabletop new`, skill a strati per card/token/board, `render.low-resolution`, modalità bozza (`ctx.draft`), binari precompilati con `install.sh` | Valutazione con 3 brief in sessioni nuove: almeno 2/3 senza interventi, con check e build puliti (Spec M3 §9) |
+| **M3** ✅ | Ciclo agente: `rustabletop schema`, `rustabletop render <id>`, `rustabletop new`, skill a strati per card/token/board (incorporata nel binario, `skill install`), `render.low-resolution`, modalità bozza (`ctx.draft`), binari precompilati con `install.sh` / `install.ps1` | Fatto: 3/3 brief (push-your-luck, territorio, dungeon) superati senza interventi con check e build puliti e verifica visiva approvata; release di prova su Linux, macOS e Windows; test di `new`, `schema`, `render` per kind, `render.low-resolution`, bozza, coerenza della skill |
 | **M4** | Export TTS (Deck, Custom Token, Custom Board) | Il gioco si importa in TTS ed è giocabile |
 
 Backlog dopo v0.1: watch mode, MCP, forme da SVG, disposizione a nido d'ape degli esagoni, export SVG di taglio, pacchetti Typst Universe, pipeline di asset/illustrazioni, preset print-on-demand, pubblicazione.
@@ -145,7 +145,7 @@ Backlog dopo v0.1: watch mode, MCP, forme da SVG, disposizione a nido d'ape degl
 - Release: Linux compilato su `ubuntu-22.04` (glibc 2.35, compatibile con le distribuzioni recenti), macOS arm64 su `macos-latest`, Windows x86_64 (MSVC) su `windows-latest` come zip; `install.sh` copre Windows da Git Bash/MSYS (serve `unzip`), `install.ps1` da PowerShell (`irm …/install.ps1 | iex`; aggiunge `~\.local\bin` al PATH utente, disattivabile con `RUSTABLETOP_NO_MODIFY_PATH`). I tag con `-` sono prerelease; `install.sh` installa l'ultima release, prerelease comprese (oppure `RUSTABLETOP_VERSION`).
 - Versione del workspace portata a `0.1.0-alpha.1`, la prima release prevista da §8.
 - Correzioni dalla valutazione: i `tiles` dividono la plancia in **sezioni uguali** (prima l'ultima poteva essere una striscia di pochi mm: 360×250 su A4 dava 186 + 186 + 4 mm); i PNG in bozza finiscono in `-draft.png` invece di sovrascrivere quelli definitivi; la plancia del progetto iniziale passa a 350×250 (2 sezioni); skill precisata su `render`, icone, token circolari, `cell-shape`, sezioni.
-- Proposte emerse dalla valutazione, fuori da M3: anteprima di un foglio impaginato (`render --sheet`), pagine per componente nel report di `build`, diagnostica per elementi che escono dalla faccia o si sovrappongono.
+- Proposte emerse dalla valutazione, fuori da M3: anteprima dei fogli stampati (§8, "Anteprima dei fogli"), pagine per componente nel report di `build`, diagnostica per elementi che escono dalla faccia o si sovrappongono.
 
 ## 7. Rischi
 
@@ -154,6 +154,8 @@ Backlog dopo v0.1: watch mode, MCP, forme da SVG, disposizione a nido d'ape degl
 - **Clip su forme non rettangolari:** verificato in M2.5, Typst 0.15.1 non ha clip su path arbitrario (solo `radius` sui box). Si usa il clip rettangolare sul riquadro + bleed e la linea di taglio sul contorno.
 
 ## 8. Questioni aperte
+
+- **Anteprima dei fogli** *(proposta dalla valutazione M3, da collocare: M4 o una M3.x)*. Tutti e tre gli agenti della valutazione hanno rasterizzato il PDF con `pdftoppm` per controllare l'impaginazione (fogli, retri, piega, sezioni della plancia): `render` mostra solo le facce, e un errore di imposition o un retro non allineato si vede solo sul foglio. Proposta: `rustabletop build --sheets` scrive anche un PNG per pagina del PDF in `out/sheets/<nn>-<component>-<tipo>.png` (`front`, `back`, `fold`, `assembly`, `tile-A1`, …), a 72 ppi di default (`--sheets-ppi`), e il report elenca le pagine per componente (`{ component, page, type, png }`), chiudendo anche la proposta del conteggio delle pagine. Si fa in `build` e non in un comando separato perché il documento è già compilato: rasterizzare le pagine costa pochi ms ciascuna, mentre un comando a parte ricompilerebbe tutto. Alternativa: `rustabletop render --sheet <component> [--page N]`, utile per controllare un solo componente senza il build completo; si può aggiungere dopo, riusando lo stesso codice. La skill aggiungerebbe "guarda un foglio per componente" al passo 6 del ciclo.
 
 - **Template dichiarativi in futuro?** Valutare solo se i template Typst si rivelano un collo di bottiglia per l'agente (misurabile in M3).
 - **Asset e illustrazioni:** in parte risolta da `format: asset` (M2): file verificato dal check, segnaposto se il campo opzionale manca. Restano da definire le versioni per stampa e TTS.
