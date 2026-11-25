@@ -1,6 +1,6 @@
 # rustabletop — Decisioni v0.1
 
-**Stato:** M0, M1, M2, M2.5, M2.6 completati (M2 con la PR #2, M2.5 con la PR #3, M2.6 sul branch `m2.6-board`, 25/11/2026). Prossima: M3 (ciclo agente).
+**Stato:** M0–M2.6 completati (M2 PR #2, M2.5 PR #3, M2.6 PR #5; 25/11/2026). Prossima: M3, vedi "Spec M3 — ciclo agente.md".
 **Sostituisce, per lo scope:** le sezioni 5–6, 9, 11–12 del "Design iniziale". I principi delle sezioni 1–2 restano validi come direzione di lungo periodo.
 
 ---
@@ -87,7 +87,7 @@ Il valore non sta nel "dati → carte → PDF", già coperto da nanDECK, Squib, 
 | **M2** ✅ | Contratto delle facce, `@rtt/std`, dati virtuali, imposition generata, `rtt build` (PR #2) | Il mazzo dello spike si ricostruisce dal manifest; overflow e icone sconosciute sono diagnostiche localizzate; build deterministico |
 | **M2.5** ✅ | Modello dei componenti generalizzato + kind `token` | Fatto: carte con lo stesso layout di M2, Sigillo `circle`/`fold` e Vortice `hex` a faccia singola in `examples/sigilli` con linee di taglio, test del fold, `manifest.face` sulle facce sconosciute, rettangolo inscritto testato; build deterministico |
 | **M2.6** ✅ | Kind `board` (tiles / poster, `fields` inline), griglie `hex`/`square` con `format: grid-cell`, geometria condivisa (`ctx.components`, `grid.cell: <id>`), istruzioni di montaggio, linee di taglio a doppia traccia | Fatto: `dungeon-map` 500×350 in `examples/sigilli` con `fields` inline e griglia `hex` da `vortex`, 4 sezioni A4 + pagina di montaggio; test di copertura delle sezioni, `poster`, griglia, `data.grid-cell`, `manifest.grid` con `did you mean`, `back` su `tiles`; doppia traccia verificata sui render; build deterministico |
-| **M3** | Ciclo agente: `schema`/`render --json`, skill per card, token, board; avviso `render.low-resolution` per le immagini sotto i 200 dpi alla dimensione stampata | Claude crea un mini-gioco con carte, token e plancia senza correzioni manuali |
+| **M3** | Ciclo agente: `rtt schema`, `rtt render <id>`, `rtt new`, skill a strati per card/token/board, `render.low-resolution`, modalità bozza (`ctx.draft`), binari precompilati con `install.sh` | Valutazione con 3 brief in sessioni nuove: almeno 2/3 senza interventi, con check e build puliti (Spec M3 §9) |
 | **M4** | Export TTS (Deck, Custom Token, Custom Board) | Il gioco si importa in TTS ed è giocabile |
 
 Backlog dopo v0.1: watch mode, MCP, forme da SVG, disposizione a nido d'ape degli esagoni, export SVG di taglio, pacchetti Typst Universe, pipeline di asset/illustrazioni, preset print-on-demand, pubblicazione.
