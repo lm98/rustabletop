@@ -7,6 +7,7 @@ use serde_json::{Map, Value};
 
 use crate::component::{self, Kind, Orientation, Production, ProductionDoc, Shape, ShapeDoc};
 use crate::diagnostics::{Diagnostic, Location, Subject};
+use crate::grid::{self, Grid, GridDoc};
 use crate::schema;
 use crate::source::{self, Located, pointer_push};
 use crate::template;
@@ -87,6 +88,7 @@ struct ComponentDoc {
     data: Option<String>,
     fields: Option<Value>,
     print: Option<ProductionDoc>,
+    grid: Option<GridDoc>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -108,6 +110,7 @@ pub struct Component {
     pub bleed: Length,
     pub faces: BTreeMap<String, String>,
     pub production: Production,
+    pub grid: Option<Grid>,
     pub data: Option<String>,
     pub schema: Value,
     pub instances: Vec<Instance>,
@@ -216,6 +219,22 @@ fn load(root: &Path, diags: &mut Vec<Diagnostic>) -> Option<Project> {
     let icons = check_icons(root, &doc.icons, &manifest, diags);
     let fonts = check_fonts(root, doc.fonts.as_deref(), &manifest, diags);
 
+    let shapes: Vec<(String, Option<Shape>)> = doc
+        .components
+        .iter()
+        .map(|comp| {
+            let shape = component::parse_shape(&ShapeDoc {
+                kind: comp.kind,
+                shape: comp.shape.as_ref(),
+                size: &comp.size,
+                orientation: comp.orientation,
+                radius: comp.radius,
+            })
+            .ok();
+            (comp.id.clone(), shape)
+        })
+        .collect();
+
     let mut components = Vec::new();
     let mut seen = HashMap::new();
     for (i, comp) in doc.components.into_iter().enumerate() {
@@ -274,6 +293,32 @@ fn load(root: &Path, diags: &mut Vec<Diagnostic>) -> Option<Project> {
         .ok();
 
         let faces_ok = check_faces(comp.kind, &comp.faces, &at, &subject, diags);
+        let grid = match (&comp.grid, comp.kind, shape) {
+            (None, _, _) => Ok(None),
+            (Some(_), kind, _) if kind != Kind::Board => {
+                diags.push(
+                    Diagnostic::error(
+                        "manifest.grid",
+                        format!("a {} cannot have a `grid`", kind.name()),
+                    )
+                    .at(at("/grid"))
+                    .about(subject.clone())
+                    .hint("grids are available on boards"),
+                );
+                Err(())
+            }
+            (Some(_), _, None) => Err(()),
+            (Some(doc), _, Some(shape)) => grid::resolve(doc, shape.bbox(), &shapes)
+                .map(Some)
+                .map_err(|e| {
+                    diags.push(
+                        Diagnostic::error("manifest.grid", e.message)
+                            .at(at(&format!("/grid/{}", e.key)))
+                            .about(subject.clone())
+                            .hints(e.hints),
+                    )
+                }),
+        };
         let production = component::production(
             comp.kind,
             comp.faces.contains_key("back"),
@@ -297,6 +342,20 @@ fn load(root: &Path, diags: &mut Vec<Diagnostic>) -> Option<Project> {
             .schema
             .clone()
             .unwrap_or_else(|| Value::Object(Map::new()));
+        let uses_grid_cells = schema::formatted_paths(&user_schema)
+            .iter()
+            .any(|(_, f)| *f == schema::Format::GridCell);
+        if uses_grid_cells && comp.grid.is_none() {
+            diags.push(
+                Diagnostic::error(
+                    "manifest.schema",
+                    "`format: grid-cell` needs a `grid` on the component",
+                )
+                .at(at("/schema"))
+                .about(subject.clone())
+                .hint("declare `grid: { type, cols, rows, cell }` on a board"),
+            );
+        }
         let issues = schema::lint(&user_schema);
         if !issues.is_empty() {
             for issue in issues {
@@ -415,10 +474,12 @@ fn load(root: &Path, diags: &mut Vec<Diagnostic>) -> Option<Project> {
             schema: &schema,
             validator: &validator,
             icons: &icons,
+            grid: grid.as_ref().ok().and_then(Option::as_ref),
         };
         let instances = validate_records(&data, &records, &context, diags);
 
-        if let (Some(shape), Some(production), true) = (shape, production, faces_ok) {
+        if let (Some(shape), Some(production), true, Ok(grid)) = (shape, production, faces_ok, grid)
+        {
             components.push(Component {
                 id: comp.id,
                 kind: comp.kind,
@@ -426,6 +487,7 @@ fn load(root: &Path, diags: &mut Vec<Diagnostic>) -> Option<Project> {
                 bleed: comp.bleed.unwrap_or(DEFAULT_BLEED),
                 faces: comp.faces,
                 production,
+                grid,
                 data: comp.data,
                 schema,
                 instances,
@@ -614,6 +676,7 @@ struct RecordContext<'a> {
     schema: &'a Value,
     validator: &'a jsonschema::Validator,
     icons: &'a [String],
+    grid: Option<&'a Grid>,
 }
 
 fn validate_records(
@@ -707,26 +770,19 @@ fn check_formats(
     diags: &mut Vec<Diagnostic>,
 ) -> bool {
     let before = diags.len();
-    for (field, format) in schema::formatted_fields(context.schema) {
-        let Some(value) = fields.get(&field) else {
-            continue;
-        };
-        let values: Vec<(String, &str)> = match value {
-            Value::String(s) => vec![(pointer_push(base, &field), s.as_str())],
-            Value::Array(items) => items
-                .iter()
-                .enumerate()
-                .filter_map(|(i, v)| {
-                    let pointer = pointer_push(&pointer_push(base, &field), &i.to_string());
-                    Some((pointer, v.as_str()?))
-                })
-                .collect(),
-            _ => Vec::new(),
-        };
-        for (pointer, text) in values {
+    let record = Value::Object(fields.clone());
+    for (path, format) in schema::formatted_paths(context.schema) {
+        for (relative, value) in schema::select(&record, &path, String::new()) {
+            let pointer = format!("{base}{relative}");
+            let field = source::pointer_segments(&relative).join(".");
             let at = data.location(&pointer);
-            match format {
-                schema::Format::RichText => {
+            let error = |code: &'static str, message: String| {
+                Diagnostic::error(code, format!("`{field}`: {message}"))
+                    .at(at.clone())
+                    .about(subject(Some(field.clone())))
+            };
+            match (format, value) {
+                (schema::Format::RichText, Value::String(text)) => {
                     for token in template::icon_tokens(text) {
                         if context.icons.iter().any(|i| i == token) {
                             continue;
@@ -740,29 +796,40 @@ fn check_formats(
                             },
                         ]);
                         diags.push(
-                            Diagnostic::error(
-                                "data.unknown-icon",
-                                format!("`{field}`: unknown icon `:{token}:`"),
-                            )
-                            .at(at.clone())
-                            .about(subject(Some(field.clone())))
-                            .hints(hints),
+                            error("data.unknown-icon", format!("unknown icon `:{token}:`"))
+                                .hints(hints),
                         );
                     }
                 }
-                schema::Format::Asset => {
+                (schema::Format::Asset, Value::String(text)) => {
                     if !is_inside(text) || !context.root.join(text).is_file() {
                         diags.push(
-                            Diagnostic::error(
+                            error(
                                 "data.missing-asset",
-                                format!("`{field}`: asset `{text}` not found in the project"),
+                                format!("asset `{text}` not found in the project"),
                             )
-                            .at(at)
-                            .about(subject(Some(field.clone())))
                             .hints(sibling_suggestion(context.root, text)),
                         );
                     }
                 }
+                (schema::Format::GridCell, value) => {
+                    let Some(grid) = context.grid else { continue };
+                    let cell = value
+                        .as_array()
+                        .filter(|a| a.len() == 2)
+                        .and_then(|a| Some((a[0].as_i64()?, a[1].as_i64()?)));
+                    let problem = match cell {
+                        None => Some(format!("{value} is not a `[col, row]` pair of integers")),
+                        Some((col, row)) if !grid.contains(col, row) => {
+                            Some(format!("[{col}, {row}] is outside the grid"))
+                        }
+                        Some(_) => None,
+                    };
+                    if let Some(message) = problem {
+                        diags.push(error("data.grid-cell", message).hint(grid.describe_bounds()));
+                    }
+                }
+                _ => {}
             }
         }
     }

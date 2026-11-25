@@ -65,3 +65,37 @@ components:
     fields:
       qty: 6
       label: Vortice
+
+  - id: dungeon-map
+    kind: board
+    size: { width: 500mm, height: 350mm }
+    bleed: 3mm
+    schema:
+      required: [title]
+      properties:
+        title: { type: string }
+        spaces:
+          type: array
+          items:
+            type: object
+            required: [at, terrain]
+            properties:
+              at: { format: grid-cell }
+              terrain: { enum: [floor, lava, wall] }
+    faces:
+      front: templates/map.typ
+    fields:
+      title: Le Cripte
+      spaces:
+        - { at: [3, 4], terrain: lava }
+        - { at: [4, 4], terrain: lava }
+        - { at: [4, 5], terrain: lava }
+        - { at: [8, 1], terrain: wall }
+        - { at: [8, 2], terrain: wall }
+        - { at: [8, 3], terrain: wall }
+        - { at: [9, 3], terrain: wall }
+        - { at: [12, 7], terrain: lava }
+    grid: { type: hex, cols: 14, rows: 9, cell: vortex, origin: [25mm, 40mm] }
+    print:
+      mode: tiles
+      overlap: 10mm

@@ -1,0 +1,15 @@
+game: fixture
+components:
+  - id: map
+    kind: board
+    size: { width: 200mm, height: 200mm }
+    faces: { front: face.typ }
+    schema:
+      properties:
+        at: { format: grid-cell }
+  - id: wound
+    kind: token
+    shape: circle
+    size: 25mm
+    grid: { type: square, cols: 2, rows: 2, cell: 10mm }
+    faces: { front: face.typ }

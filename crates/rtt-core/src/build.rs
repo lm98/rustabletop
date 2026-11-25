@@ -15,8 +15,10 @@ use typst_layout::PagedDocument;
 use typst_pdf::PdfOptions;
 use typst_render::RenderOptions;
 
+use crate::board::{self, Board, TileLayout};
+use crate::component::{BoardMode, Kind};
 use crate::diagnostics::{Diagnostic, Subject};
-use crate::impose::{self, Layout, Sheet};
+use crate::impose::{self, Layout, Page, Sheet};
 use crate::project::{self, Component, Project};
 use crate::schema::{self, Format};
 use crate::world::ProjectWorld;
@@ -78,7 +80,7 @@ pub fn build(root: &Path, options: &BuildOptions) -> Result<Built> {
     };
     diagnostics.extend(overflows(&project, &document));
 
-    let sheets = plan.sheets.len();
+    let sheets = plan.pages.len();
     let pdf = match pdf(&world, &document, sheets) {
         Ok(pdf) => pdf,
         Err(errors) => {
@@ -150,59 +152,27 @@ struct Preview {
 
 #[derive(Debug, Serialize)]
 pub struct Plan {
-    paper: (f64, f64),
     components: Vec<Value>,
-    sheets: Vec<Sheet>,
+    pages: Vec<Page>,
     previews: Vec<Preview>,
 }
 
 impl Plan {
     pub fn new(project: &Project) -> Result<Self, Vec<Diagnostic>> {
-        let paper = project.print.paper.size();
         let mut errors = Vec::new();
         let mut components = Vec::new();
-        let mut sheets = Vec::new();
+        let mut pages = Vec::new();
         let mut previews = Vec::new();
 
         for (index, component) in project.components.iter().enumerate() {
             let bleed = component.bleed.as_mm();
             let bbox = component.shape.bbox();
-            let layout = Layout::new(
-                component.kind,
-                &project.print,
-                bbox,
-                bleed,
-                component.production,
-            );
-            let Some(grid) = impose::grid(&layout) else {
-                errors.push(
-                    Diagnostic::error(
-                        "print.too-large",
-                        format!(
-                            "a {} × {} {} with {} bleed does not fit on {:?} paper with {} margins",
-                            bbox.width,
-                            bbox.height,
-                            component.kind.name(),
-                            component.bleed,
-                            project.print.paper,
-                            project.print.margin
-                        ),
-                    )
-                    .about(Subject {
-                        component: Some(component.id.clone()),
-                        ..Subject::default()
-                    })
-                    .hint("use a larger paper, smaller margins or a smaller size"),
-                );
-                continue;
-            };
             let copies: Vec<usize> = component
                 .instances
                 .iter()
                 .enumerate()
                 .flat_map(|(i, instance)| std::iter::repeat_n(i, instance.qty as usize))
                 .collect();
-            sheets.extend(impose::sheets(index, &copies, &layout, &grid));
             for item in 0..component.instances.len() {
                 for face in component.face_names() {
                     previews.push(Preview {
@@ -213,27 +183,90 @@ impl Plan {
                 }
             }
             components.push(component_data(component));
+
+            if component.kind == Kind::Board {
+                let board = Board {
+                    trim: (bbox.width.as_mm(), bbox.height.as_mm()),
+                    bleed,
+                };
+                if component.production.mode == Some(BoardMode::Poster) {
+                    pages.extend(
+                        board::poster(index, &copies, &board, &component.face_names())
+                            .into_iter()
+                            .map(Page::Sheet),
+                    );
+                    continue;
+                }
+                let paper = project.print.paper.size();
+                let Some(layout) = TileLayout::new(
+                    &board,
+                    (paper.width.as_mm(), paper.height.as_mm()),
+                    project.print.margin.as_mm(),
+                    component.production.overlap.as_mm(),
+                ) else {
+                    errors.push(too_large(project, component));
+                    continue;
+                };
+                let first = copies.first().copied().unwrap_or_default();
+                pages.push(Page::Assembly(board::assembly(
+                    index, first, &board, &layout,
+                )));
+                for &item in &copies {
+                    pages.extend(
+                        board::tiles(index, item, &board, &layout)
+                            .into_iter()
+                            .map(Page::Tile),
+                    );
+                }
+                continue;
+            }
+
+            let layout = Layout::new(
+                component.kind,
+                &project.print,
+                bbox,
+                bleed,
+                component.production,
+            );
+            let Some(grid) = impose::grid(&layout) else {
+                errors.push(too_large(project, component));
+                continue;
+            };
+            pages.extend(
+                impose::sheets(index, &copies, &layout, &grid)
+                    .into_iter()
+                    .map(Page::Sheet),
+            );
         }
 
         if !errors.is_empty() {
             return Err(errors);
         }
         Ok(Self {
-            paper: (paper.width.as_mm(), paper.height.as_mm()),
             components,
-            sheets,
+            pages,
             previews,
         })
     }
 
-    pub fn sheet_count(&self) -> usize {
-        self.sheets.len()
+    pub fn page_count(&self) -> usize {
+        self.pages.len()
+    }
+
+    pub fn pages_of(&self, component: usize) -> Vec<&Page> {
+        self.pages
+            .iter()
+            .filter(|p| p.component() == component)
+            .collect()
     }
 
     pub fn sheets_of(&self, component: usize) -> Vec<&Sheet> {
-        self.sheets
+        self.pages
             .iter()
-            .filter(|s| s.component == component)
+            .filter_map(|p| match p {
+                Page::Sheet(s) if s.component == component => Some(s),
+                _ => None,
+            })
             .collect()
     }
 
@@ -253,6 +286,27 @@ impl Plan {
         world.add_file(DATA, serde_json::to_vec(self)?)?;
         Ok(world)
     }
+}
+
+fn too_large(project: &Project, component: &Component) -> Diagnostic {
+    let bbox = component.shape.bbox();
+    Diagnostic::error(
+        "print.too-large",
+        format!(
+            "a {} × {} {} with {} bleed does not fit on {:?} paper with {} margins",
+            bbox.width,
+            bbox.height,
+            component.kind.name(),
+            component.bleed,
+            project.print.paper,
+            project.print.margin
+        ),
+    )
+    .about(Subject {
+        component: Some(component.id.clone()),
+        ..Subject::default()
+    })
+    .hint("use a larger paper, smaller margins or a smaller size")
 }
 
 fn component_data(component: &Component) -> Value {
@@ -285,6 +339,7 @@ fn component_data(component: &Component) -> Value {
         "shape": component.shape.to_json(),
         "trim": [bbox.width.as_mm(), bbox.height.as_mm()],
         "bleed": component.bleed.as_mm(),
+        "grid": component.grid.as_ref().map(|g| g.to_json(component.bleed.as_mm())),
         "assets": assets,
         "items": items,
     })
@@ -307,40 +362,67 @@ fn main_source(project: &Project) -> String {
     src
 }
 
-const MAIN_BODY: &str = r#"#import "@rtt/std:0.1.0": outline
+const MAIN_BODY: &str = r##"#import "@rtt/std:0.1.0": outline
 #let rtt-data = json("{DATA}")
 #let rtt-mm(v) = v * 1mm
 #let rtt-path(v) = if v == none { none } else if type(v) == array { v.map(rtt-path) } else { path("/" + v) }
+#let rtt-note(size: 7pt, fill: black, body) = text(font: "DejaVu Sans Mono", size: size, fill: fill, body)
+
+#let rtt-shape(s) = (
+  type: s.type,
+  orientation: s.orientation,
+  width: rtt-mm(s.width),
+  height: rtt-mm(s.height),
+  radius: if s.radius == none { none } else { rtt-mm(s.radius) },
+  inscribed: (
+    x: rtt-mm(s.inscribed.at(0)), y: rtt-mm(s.inscribed.at(1)),
+    width: rtt-mm(s.inscribed.at(2)), height: rtt-mm(s.inscribed.at(3)),
+  ),
+)
+
+#let rtt-grid(g) = if g == none { none } else {
+  (
+    type: g.type,
+    orientation: g.orientation,
+    cols: g.cols,
+    rows: g.rows,
+    cell: rtt-mm(g.cell),
+    width: rtt-mm(g.width),
+    height: rtt-mm(g.height),
+    origin: (rtt-mm(g.origin.at(0)), rtt-mm(g.origin.at(1))),
+    centers: g.centers.map(((col, row, x, y)) => (col, row, rtt-mm(x), rtt-mm(y))),
+  )
+}
+
+#let rtt-geometry(c) = (
+  kind: c.kind,
+  shape: rtt-shape(c.shape),
+  trim: (width: rtt-mm(c.trim.at(0)), height: rtt-mm(c.trim.at(1))),
+  bleed: rtt-mm(c.bleed),
+)
+
 #let rtt-components = rtt-data.components.map(c => {
   let items = c.items.map(item => {
     for field in c.assets { item.insert(field, rtt-path(item.at(field))) }
     item
   })
-  (..c, items: items)
+  (..c, items: items, geometry: rtt-geometry(c), grid: rtt-grid(c.grid))
 })
 
-#let rtt-ctx(c, face, item) = {
-  let s = c.shape
-  (
-    kind: c.kind,
-    shape: (
-      type: s.type,
-      orientation: s.orientation,
-      width: rtt-mm(s.width),
-      height: rtt-mm(s.height),
-      radius: if s.radius == none { none } else { rtt-mm(s.radius) },
-      inscribed: (
-        x: rtt-mm(s.inscribed.at(0)), y: rtt-mm(s.inscribed.at(1)),
-        width: rtt-mm(s.inscribed.at(2)), height: rtt-mm(s.inscribed.at(3)),
-      ),
-    ),
-    trim: (width: rtt-mm(c.trim.at(0)), height: rtt-mm(c.trim.at(1))),
-    bleed: rtt-mm(c.bleed),
-    component: c.id,
-    face: face,
-    item: item,
-  )
+#let rtt-all = {
+  let all = (:)
+  for c in rtt-components { all.insert(c.id, c.geometry) }
+  all
 }
+
+#let rtt-ctx(c, face, item) = (
+  ..c.geometry,
+  component: c.id,
+  face: face,
+  item: item,
+  grid: c.grid,
+  components: rtt-all,
+)
 
 #let rtt-face(ci, k, face) = {
   let c = rtt-components.at(ci)
@@ -352,19 +434,16 @@ const MAIN_BODY: &str = r#"#import "@rtt/std:0.1.0": outline
   })
 }
 
-#let rtt-paper = (width: rtt-mm(rtt-data.paper.at(0)), height: rtt-mm(rtt-data.paper.at(1)))
+#let rtt-line(m, stroke) = place(top + left,
+  line(start: (rtt-mm(m.x1), rtt-mm(m.y1)), end: (rtt-mm(m.x2), rtt-mm(m.y2)), stroke: stroke))
 
-#for sheet in rtt-data.sheets {
+#let rtt-sheet(sheet) = {
   let c = rtt-components.at(sheet.component)
   let (w, h, b) = (c.trim.at(0), c.trim.at(1), c.bleed)
-  page(width: rtt-paper.width, height: rtt-paper.height, margin: 0pt, {
-    for m in sheet.marks {
-      place(top + left, line(start: (rtt-mm(m.x1), rtt-mm(m.y1)), end: (rtt-mm(m.x2), rtt-mm(m.y2)), stroke: 0.25pt + black))
-    }
+  page(width: rtt-mm(sheet.page.at(0)), height: rtt-mm(sheet.page.at(1)), margin: 0pt, {
+    for m in sheet.marks { rtt-line(m, 0.25pt + black) }
     if sheet.fold != none {
-      let f = sheet.fold
-      place(top + left, line(start: (rtt-mm(f.x1), rtt-mm(f.y1)), end: (rtt-mm(f.x2), rtt-mm(f.y2)),
-        stroke: (paint: luma(120), thickness: 0.4pt, dash: "dashed")))
+      rtt-line(sheet.fold, (paint: luma(120), thickness: 0.4pt, dash: "dashed"))
     }
     for cell in sheet.cells {
       let face = rtt-face(sheet.component, cell.item, cell.face)
@@ -375,11 +454,90 @@ const MAIN_BODY: &str = r#"#import "@rtt/std:0.1.0": outline
     }
     if sheet.cut_lines {
       for cell in sheet.cells {
-        place(top + left, dx: rtt-mm(cell.x - b), dy: rtt-mm(cell.y - b),
-          outline(rtt-ctx(c, cell.face, none), fill: none, stroke: 0.3pt + luma(60)))
+        for stroke in (1.2pt + white, 0.3pt + black) {
+          place(top + left, dx: rtt-mm(cell.x - b), dy: rtt-mm(cell.y - b),
+            outline(rtt-ctx(c, cell.face, none), fill: none, stroke: stroke))
+        }
       }
     }
   })
+}
+
+#let rtt-tile(tile) = {
+  let c = rtt-components.at(tile.component)
+  let win = tile.window
+  let (ax, ay) = (rtt-mm(tile.at.at(0)), rtt-mm(tile.at.at(1)))
+  page(width: rtt-mm(tile.page.at(0)), height: rtt-mm(tile.page.at(1)), margin: 0pt, {
+    place(top + left, dx: ax, dy: ay,
+      box(width: rtt-mm(win.width), height: rtt-mm(win.height), clip: true,
+        place(top + left, dx: -rtt-mm(win.x), dy: -rtt-mm(win.y), rtt-face(tile.component, tile.item, "front"))))
+    for strip in tile.under {
+      let r = strip.rect
+      place(top + left, dx: rtt-mm(r.x), dy: rtt-mm(r.y),
+        rect(width: rtt-mm(r.width), height: rtt-mm(r.height), stroke: none,
+          fill: tiling(size: (3mm, 3mm), line(start: (0mm, 3mm), end: (3mm, 0mm), stroke: 0.3pt + luma(150)))))
+      let note = box(fill: white, inset: 1mm, rtt-note(size: 6pt)[under #strip.label])
+      place(top + left, dx: rtt-mm(r.x), dy: rtt-mm(r.y),
+        box(width: rtt-mm(r.width), height: rtt-mm(r.height),
+          align(center + horizon, if strip.vertical { rotate(-90deg, reflow: true, note) } else { note })))
+    }
+    for t in tile.trims {
+      rtt-line(t, (paint: black, thickness: 0.4pt, dash: "dashed"))
+      let vertical = t.x1 == t.x2
+      place(top + left,
+        dx: rtt-mm(t.x1) - if vertical { 1.6mm } else { -3mm },
+        dy: rtt-mm(t.y1) - if vertical { -3mm } else { 1.9mm },
+        rtt-note(size: 9pt, if vertical { rotate(90deg, reflow: true)[✂] } else { [✂] }))
+    }
+    for m in tile.marks { rtt-line(m, 0.25pt + black) }
+    for (x, y) in tile.registration {
+      let (x, y) = (rtt-mm(x), rtt-mm(y))
+      let stroke = 0.25pt + black
+      place(top + left, dx: x - 1.2mm, dy: y - 1.2mm, circle(radius: 1.2mm, stroke: stroke))
+      place(top + left, dx: x - 2mm, dy: y, line(length: 4mm, stroke: stroke))
+      place(top + left, dx: x, dy: y - 2mm, line(length: 4mm, angle: 90deg, stroke: stroke))
+    }
+    let (rows, cols) = (tile.sections.at(0), tile.sections.at(1))
+    place(top + left, dx: ax + 4mm, dy: ay - 6mm,
+      rtt-note(size: 8pt)[*#tile.label* #h(2mm) #c.id · section #tile.label of #(rows * cols) (#rows × #cols)])
+  })
+}
+
+#let rtt-assembly(a) = {
+  let c = rtt-components.at(a.component)
+  let s = a.scale
+  let (ax, ay) = (rtt-mm(a.at.at(0)), rtt-mm(a.at.at(1)))
+  let (pw, ph) = (rtt-mm(a.page.at(0)), rtt-mm(a.page.at(1)))
+  let mm-text(v) = str(calc.round(v, digits: 1))
+  page(width: pw, height: ph, margin: 0pt, {
+    place(top + left, dx: ax, dy: ay - 9mm, rtt-note(size: 11pt)[*#c.id* — assembly])
+    place(top + left, dx: ax, dy: ay,
+      box(width: rtt-mm(a.canvas.at(0) * s), height: rtt-mm(a.canvas.at(1) * s), clip: true,
+        scale(x: s * 100%, y: s * 100%, origin: top + left, reflow: true,
+          rtt-face(a.component, a.item, "front"))))
+    for sec in a.sections {
+      let r = sec.rect
+      place(top + left, dx: ax + rtt-mm(r.x * s), dy: ay + rtt-mm(r.y * s),
+        rect(width: rtt-mm(r.width * s), height: rtt-mm(r.height * s), stroke: 0.6pt + red, fill: none,
+          align(center + horizon, box(fill: white, inset: 1mm, rtt-note(size: 10pt, fill: red)[*#sec.label*]))))
+    }
+    let bottom = ay + rtt-mm(a.canvas.at(1) * s) + 5mm
+    place(top + left, dx: ax, dy: bottom, block(width: pw - 2 * ax, rtt-note(size: 8pt, {
+      set par(spacing: 0.8em)
+      [Final size: #mm-text(a.trim.at(0)) × #mm-text(a.trim.at(1)) mm, plus #mm-text(a.bleed) mm bleed. Sections overlap by #mm-text(a.overlap) mm.]
+      enum(
+        [Cut each section along the dashed ✂ lines on its left and top edges.],
+        [Lay each section over the hatched strip marked "under ..." on its neighbour, aligning the registration marks.],
+        [Glue, then trim the outer edges at the crop marks.],
+      )
+    })))
+  })
+}
+
+#for p in rtt-data.pages {
+  if p.type == "sheet" { rtt-sheet(p) }
+  else if p.type == "tile" { rtt-tile(p) }
+  else { rtt-assembly(p) }
 }
 
 #for p in rtt-data.previews {
@@ -387,7 +545,7 @@ const MAIN_BODY: &str = r#"#import "@rtt/std:0.1.0": outline
   page(width: rtt-mm(c.trim.at(0) + 2 * c.bleed), height: rtt-mm(c.trim.at(1) + 2 * c.bleed), margin: 0pt,
     rtt-face(p.component, p.item, p.face))
 }
-"#;
+"##;
 
 fn overflows(project: &Project, document: &PagedDocument) -> Vec<Diagnostic> {
     let label = |name: &str| Selector::Label(Label::new(PicoStr::intern(name)).expect("non-empty"));

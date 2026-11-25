@@ -73,3 +73,34 @@
     image(source, width: width, height: height, fit: fit)
   }
 }
+
+#let cells(grid) = grid.centers
+
+#let cell-center(grid, col, row) = {
+  let (_, _, x, y) = grid.centers.at(row * grid.cols + col)
+  (x, y)
+}
+
+#let cell-shape(grid, inset: 0mm, ..args) = {
+  let (width, height) = (grid.width, grid.height)
+  let ratio = (grid.cell - 2 * inset) / grid.cell
+  if grid.type == "hex" {
+    hexagon(width * ratio, height * ratio, grid.orientation, ..args)
+  } else {
+    rect(width: width * ratio, height: height * ratio, ..args)
+  }
+}
+
+#let draw-grid(grid, stroke: 0.5pt + black, fill: none, inset: 0mm, cell: none) = {
+  for (col, row, x, y) in grid.centers {
+    let paint = if type(fill) == function { fill(col, row) } else { fill }
+    let ratio = (grid.cell - 2 * inset) / grid.cell
+    let (w, h) = (grid.width * ratio, grid.height * ratio)
+    place(top + left, dx: x - w / 2, dy: y - h / 2,
+      cell-shape(grid, inset: inset, fill: paint, stroke: stroke))
+    if cell != none {
+      place(top + left, dx: x - grid.width / 2, dy: y - grid.height / 2,
+        box(width: grid.width, height: grid.height, align(center + horizon, cell(col, row))))
+    }
+  }
+}

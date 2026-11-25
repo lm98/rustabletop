@@ -8,6 +8,14 @@ use crate::units::{Length, Size};
 pub enum Kind {
     Card,
     Token,
+    Board,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum BoardMode {
+    Tiles,
+    Poster,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -23,6 +31,7 @@ impl Kind {
         match self {
             Kind::Card => "card",
             Kind::Token => "token",
+            Kind::Board => "board",
         }
     }
 
@@ -32,7 +41,7 @@ impl Kind {
 
     pub fn shapes(self) -> &'static [&'static str] {
         match self {
-            Kind::Card => &["rect"],
+            Kind::Card | Kind::Board => &["rect"],
             Kind::Token => &["circle", "square", "hex"],
         }
     }
@@ -41,16 +50,21 @@ impl Kind {
         match self {
             Kind::Card => &[Sides::Duplex, Sides::Single],
             Kind::Token => &[Sides::Fold, Sides::Duplex, Sides::Single],
+            Kind::Board => &[],
         }
     }
 
-    pub fn default_sides(self) -> Sides {
-        self.sides()[0]
+    fn print_options(self) -> &'static [&'static str] {
+        match self {
+            Kind::Card => &["sides", "crop-marks"],
+            Kind::Token => &["sides", "cut-lines", "gap"],
+            Kind::Board => &["mode", "overlap"],
+        }
     }
 
     pub fn default_gap(self) -> Length {
         match self {
-            Kind::Card => Length::mm(0.0),
+            Kind::Card | Kind::Board => Length::mm(0.0),
             Kind::Token => Length::mm(2.0),
         }
     }
@@ -306,6 +320,24 @@ pub struct ProductionDoc {
     pub crop_marks: Option<bool>,
     pub cut_lines: Option<bool>,
     pub gap: Option<Length>,
+    pub mode: Option<BoardMode>,
+    pub overlap: Option<Length>,
+}
+
+impl ProductionDoc {
+    fn set_options(&self) -> Vec<&'static str> {
+        [
+            ("sides", self.sides.is_some()),
+            ("crop-marks", self.crop_marks.is_some()),
+            ("cut-lines", self.cut_lines.is_some()),
+            ("gap", self.gap.is_some()),
+            ("mode", self.mode.is_some()),
+            ("overlap", self.overlap.is_some()),
+        ]
+        .into_iter()
+        .filter_map(|(key, set)| set.then_some(key))
+        .collect()
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Serialize)]
@@ -315,7 +347,12 @@ pub struct Production {
     pub crop_marks: bool,
     pub cut_lines: bool,
     pub gap: Length,
+    pub mode: Option<BoardMode>,
+    pub overlap: Length,
 }
+
+const DEFAULT_OVERLAP: Length = Length::mm(10.0);
+const MAX_OVERLAP_MM: f64 = 50.0;
 
 pub fn production(
     kind: Kind,
@@ -328,6 +365,25 @@ pub fn production(
             .and_then(|v| v.as_str().map(str::to_owned))
             .unwrap_or_default()
     };
+    let allowed = kind.print_options();
+    if let Some(key) = doc.set_options().into_iter().find(|k| !allowed.contains(k)) {
+        return Err(ShapeError::new(
+            key,
+            format!("`{key}` is not available for a {}", kind.name()),
+        )
+        .hint(format!(
+            "{}s use {}",
+            kind.name(),
+            allowed
+                .iter()
+                .map(|k| format!("`{k}`"))
+                .collect::<Vec<_>>()
+                .join(", ")
+        )));
+    }
+    if kind == Kind::Board {
+        return board_production(has_back, doc);
+    }
     if let Some(sides) = doc.sides
         && !kind.sides().contains(&sides)
     {
@@ -352,30 +408,45 @@ pub fn production(
             .hint("add `back` to `faces`, or use `sides: single`"));
         }
         (Some(sides), true) => sides,
-        (None, true) => kind.default_sides(),
+        (None, true) => kind.sides()[0],
     };
-    let misplaced = match kind {
-        Kind::Card => vec![
-            ("cut-lines", doc.cut_lines.is_some()),
-            ("gap", doc.gap.is_some()),
-        ],
-        Kind::Token => vec![("crop-marks", doc.crop_marks.is_some())],
-    };
-    if let Some((key, _)) = misplaced.iter().find(|(_, set)| *set) {
-        return Err(ShapeError::new(
-            "print",
-            format!("`{key}` is not available for a {}", kind.name()),
-        )
-        .hint(match kind {
-            Kind::Card => "cards use `sides` and `crop-marks`",
-            Kind::Token => "tokens use `sides`, `cut-lines` and `gap`",
-        }));
-    }
     Ok(Production {
         sides,
         crop_marks: kind == Kind::Card && doc.crop_marks.unwrap_or(true),
         cut_lines: kind == Kind::Token && doc.cut_lines.unwrap_or(true),
         gap: doc.gap.unwrap_or(kind.default_gap()),
+        mode: None,
+        overlap: Length::mm(0.0),
+    })
+}
+
+fn board_production(has_back: bool, doc: &ProductionDoc) -> Result<Production, ShapeError> {
+    let mode = doc.mode.unwrap_or(BoardMode::Tiles);
+    if mode == BoardMode::Tiles && has_back {
+        return Err(ShapeError::new(
+            if doc.mode.is_some() { "mode" } else { "print" },
+            "a board printed as `tiles` cannot have a `back` face",
+        )
+        .hint("use `mode: poster` to print a double-sided board"));
+    }
+    let overlap = doc.overlap.unwrap_or(DEFAULT_OVERLAP);
+    if overlap.as_mm() > MAX_OVERLAP_MM {
+        return Err(ShapeError::new(
+            "overlap",
+            format!("`overlap` must be at most {MAX_OVERLAP_MM}mm"),
+        ));
+    }
+    Ok(Production {
+        sides: if has_back {
+            Sides::Duplex
+        } else {
+            Sides::Single
+        },
+        crop_marks: false,
+        cut_lines: false,
+        gap: Length::mm(0.0),
+        mode: Some(mode),
+        overlap,
     })
 }
 
@@ -499,7 +570,33 @@ mod tests {
                 .err()
                 .unwrap()
                 .key,
-            "print"
+            "crop-marks"
         );
+
+        let board = production(Kind::Board, false, &none).ok().unwrap();
+        assert_eq!(
+            (board.mode, board.overlap.as_mm()),
+            (Some(BoardMode::Tiles), 10.0)
+        );
+        let back_on_tiles = production(Kind::Board, true, &none).err().unwrap();
+        assert_eq!(
+            back_on_tiles.hints,
+            ["use `mode: poster` to print a double-sided board"]
+        );
+        let poster = ProductionDoc {
+            mode: Some(BoardMode::Poster),
+            ..ProductionDoc::default()
+        };
+        let poster = production(Kind::Board, true, &poster).ok().unwrap();
+        assert_eq!(poster.sides, Sides::Duplex);
+        let sides_on_board = ProductionDoc {
+            sides: Some(Sides::Single),
+            ..ProductionDoc::default()
+        };
+        let err = production(Kind::Board, false, &sides_on_board)
+            .err()
+            .unwrap();
+        assert_eq!(err.key, "sides");
+        assert_eq!(err.hints, ["boards use `mode`, `overlap`"]);
     }
 }

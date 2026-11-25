@@ -83,12 +83,13 @@ const KEYWORDS: &[&str] = &[
     "allOf",
     "not",
 ];
-pub const FORMATS: &[&str] = &["rich-text", "asset"];
+pub const FORMATS: &[&str] = &["rich-text", "asset", "grid-cell"];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Format {
     RichText,
     Asset,
+    GridCell,
 }
 
 impl Format {
@@ -96,27 +97,79 @@ impl Format {
         match name {
             "rich-text" => Some(Self::RichText),
             "asset" => Some(Self::Asset),
+            "grid-cell" => Some(Self::GridCell),
             _ => None,
         }
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Step {
+    Field(String),
+    Items,
+}
+
+pub fn formatted_paths(schema: &Value) -> Vec<(Vec<Step>, Format)> {
+    let mut out = Vec::new();
+    walk_formats(schema, Vec::new(), &mut out);
+    out
+}
+
+fn walk_formats(node: &Value, path: Vec<Step>, out: &mut Vec<(Vec<Step>, Format)>) {
+    if let Some(format) = node
+        .get("format")
+        .and_then(Value::as_str)
+        .and_then(Format::parse)
+    {
+        out.push((path, format));
+        return;
+    }
+    if let Some(properties) = node.get("properties").and_then(Value::as_object) {
+        for (name, sub) in properties {
+            let mut next = path.clone();
+            next.push(Step::Field(name.clone()));
+            walk_formats(sub, next, out);
+        }
+    }
+    if let Some(items) = node.get("items").filter(|i| i.is_object()) {
+        let mut next = path;
+        next.push(Step::Items);
+        walk_formats(items, next, out);
+    }
+}
+
 pub fn formatted_fields(schema: &Value) -> Vec<(String, Format)> {
-    let format_of = |node: &Value| {
-        node.get("format")
-            .and_then(Value::as_str)
-            .and_then(Format::parse)
-    };
-    schema
-        .get("properties")
-        .and_then(Value::as_object)
+    formatted_paths(schema)
         .into_iter()
-        .flatten()
-        .filter_map(|(name, prop)| {
-            let format = format_of(prop).or_else(|| prop.get("items").and_then(format_of))?;
-            Some((name.clone(), format))
+        .filter_map(|(path, format)| match path.as_slice() {
+            [Step::Field(name)] | [Step::Field(name), Step::Items] => Some((name.clone(), format)),
+            _ => None,
         })
         .collect()
+}
+
+pub fn select<'a>(value: &'a Value, path: &[Step], pointer: String) -> Vec<(String, &'a Value)> {
+    let Some((step, rest)) = path.split_first() else {
+        return vec![(pointer, value)];
+    };
+    match (step, value) {
+        (Step::Field(name), Value::Object(map)) => map
+            .get(name)
+            .map(|v| select(v, rest, crate::source::pointer_push(&pointer, name)))
+            .unwrap_or_default(),
+        (Step::Items, Value::Array(items)) => items
+            .iter()
+            .enumerate()
+            .flat_map(|(i, v)| {
+                select(
+                    v,
+                    rest,
+                    crate::source::pointer_push(&pointer, &i.to_string()),
+                )
+            })
+            .collect(),
+        _ => Vec::new(),
+    }
 }
 
 const TYPES: &[&str] = &[
@@ -434,6 +487,29 @@ mod tests {
                 ("text".to_owned(), Format::RichText)
             ]
         );
+    }
+
+    #[test]
+    fn selects_nested_formatted_values() {
+        let schema = json!({ "properties": { "spaces": { "type": "array", "items": {
+            "properties": { "at": { "format": "grid-cell" } } } } } });
+        let paths = formatted_paths(&schema);
+        assert_eq!(
+            paths,
+            [(
+                vec![
+                    Step::Field("spaces".into()),
+                    Step::Items,
+                    Step::Field("at".into())
+                ],
+                Format::GridCell
+            )]
+        );
+        let record = json!({ "spaces": [{ "at": [1, 2] }, { "at": [3, 4] }] });
+        let found = select(&record, &paths[0].0, String::new());
+        assert_eq!(found[1].0, "/spaces/1/at");
+        assert_eq!(found[1].1, &json!([3, 4]));
+        assert!(formatted_fields(&schema).is_empty());
     }
 
     #[test]

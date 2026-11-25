@@ -1,8 +1,10 @@
 #![allow(clippy::result_large_err)]
 
+mod board;
 mod build;
 mod component;
 mod diagnostics;
+mod grid;
 mod impose;
 mod project;
 mod schema;
@@ -11,10 +13,12 @@ mod template;
 mod units;
 mod world;
 
+pub use board::{Assembly, Section, Strip, Tile};
 pub use build::{BuildOptions, Built, Plan, build};
-pub use component::{Kind, Orientation, Production, Shape, Sides};
+pub use component::{BoardMode, Kind, Orientation, Production, Shape, Sides};
 pub use diagnostics::{Diagnostic, Location, Severity, Subject};
-pub use impose::{Cell, Sheet};
+pub use grid::{Grid, GridType};
+pub use impose::{Cell, Page, Sheet};
 pub use project::{
     Checked, Component, DuplexEdge, Instance, MANIFEST_FILE, Paper, Print, Project, check,
 };
