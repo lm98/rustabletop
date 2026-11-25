@@ -2,7 +2,7 @@
 
 - **Data:** 25/11/2026. **Versione:** `rustabletop 0.1.0-alpha.1` da `v0.1.0-alpha.1-test.2` via `install.sh` (URL del branch), skill da `rustabletop skill install`.
 - **Esecutore:** sotto-agente in una cartella pulita, non una sessione nuova (approssimazione concordata), messaggio iniziale = solo il brief.
-- **Esito:** superato (in attesa della verifica visiva umana).
+- **Esito:** superato; verifica visiva umana approvata (25/11/2026).
 - **Interventi:** nessuno.
 - **Risultato:** "Six Realms": plancia 350×250 con griglia hex 10×8 presa dal token, 6 terreni con icone, santuari e fortezze; 2 set da 8 gettoni hex 25 mm (Keep, Knight, Soldier, Scout) in `fold`; 12 carte obiettivo in duplex. PDF di 8 pagine A4 (carte 4, gettoni 1, montaggio + 2 sezioni).
 - **`rustabletop check`:** `ok: six-realms (objective: 12 instances, 12 copies; unit: 8 instances, 16 copies; board: 1 instances, 1 copies), 0 warning(s)` (riverificato).
