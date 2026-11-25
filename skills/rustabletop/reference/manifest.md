@@ -53,15 +53,15 @@ components: [...]            # the list below
 | `id` | Component id, used in `rustabletop render <id>/<instance>`, `ctx.components.<id>` and `grid.cell`. |
 | `kind` | `card`, `token` or `board`: sets allowed shapes, faces and print options. |
 | `shape` | `rect` (card, board: the only shape, may be omitted); `circle`, `square`, `hex` (token: required). |
-| `size` | `rect`: a preset (`poker` 63×88, `tarot` 70×120, `mini-euro` 44×68, `mini-usa` 41×63) or `{ width: 360mm, height: 250mm }`. `circle`: the diameter. `square`: the side. `hex`: the distance between opposite flat sides. |
+| `size` | `rect`: a preset (`poker` 63×88, `tarot` 70×120, `mini-euro` 44×68, `mini-usa` 41×63) or `{ width: 360mm, height: 250mm }`. `circle`: the diameter. `square`: the side. `hex`: the distance between opposite flat sides (the width of a `pointy` hex, the height of a `flat` one). |
 | `width`, `height` | Keys of a `rect` size mapping. |
 | `orientation` | `hex` only. `pointy`: a vertex at the top. `flat`: a flat side at the top. |
-| `radius` | `rect` and `square` only: rounded corners (at most half the side). |
+| `radius` | `rect` and `square` only: rounded corners (at most half the side). It shapes `outline()` and token cut lines; cards are still cut straight at the crop marks (round them with a corner cutter). |
 | `bleed` | Printed beyond the cut line so a slightly off cut shows no white edge. 3mm for cards and boards, 2mm for tokens is typical. |
 | `schema` | Validates every record; see below. Optional. |
 | `faces` | `front` is required. `back` is optional (cards, tokens, `poster` boards). |
 | `data` | Path of a YAML (or CSV) file holding a list of records. |
-| `fields` | One inline record (no `id` needed: it defaults to the component id). Cannot be combined with `data`. Without both, the component has one empty instance. |
+| `fields` | One inline record (no `id` needed: it defaults to the component id). Cannot be combined with `data`. Without both, the component has one empty instance. Any kind can use either: a board may have a `data` file of several boards. |
 | `print` | Production options; only those of the component's kind are accepted. |
 | `grid` | A grid on a board, see below. |
 

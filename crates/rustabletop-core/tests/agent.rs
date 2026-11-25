@@ -256,6 +256,8 @@ fn m3_exit_criterion_draft_reaches_templates_and_skips_images() {
 
     assert!(finished.artifacts[0].ends_with("fixture-pnp.pdf"));
     assert!(draft.artifacts[0].ends_with("fixture-pnp-draft.pdf"));
+    assert!(finished.artifacts[1].ends_with("small-front.png"));
+    assert!(draft.artifacts[1].ends_with("small-front-draft.png"));
     let has_image = |path: &str| {
         let bytes = fs::read(path).unwrap();
         bytes.windows(13).any(|w| w == b"/Subtype /Ima")
