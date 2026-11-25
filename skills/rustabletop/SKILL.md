@@ -16,7 +16,8 @@ reports problems as structured diagnostics pointing at your data.
 rustabletop --version || curl -fsSL https://raw.githubusercontent.com/lm98/rustabletop/main/install.sh | sh
 ```
 
-`install.sh` puts `rustabletop` in `~/.local/bin` (make sure it is on `PATH`). Fallback when no
+On Windows (PowerShell): `irm https://raw.githubusercontent.com/lm98/rustabletop/main/install.ps1 | iex`.
+Both put `rustabletop` in `~/.local/bin` (make sure it is on `PATH`). Fallback when no
 release fits the platform, ~8 minutes: `cargo install --git https://github.com/lm98/rustabletop rustabletop`.
 
 `rustabletop new` also writes this skill into `<dir>/.claude/skills/rustabletop/`, matching the

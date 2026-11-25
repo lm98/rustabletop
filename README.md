@@ -17,6 +17,7 @@ rustabletop render card/eclipse my-game   # PNG of one instance, all faces
 rustabletop build my-game        # my-game/out/my-game-pnp.pdf (+ --draft for an ink-saving proof)
 ```
 
+Windows PowerShell: `irm https://raw.githubusercontent.com/lm98/rustabletop/main/install.ps1 | iex`.
 Other platforms: `cargo install --git https://github.com/lm98/rustabletop rustabletop` (~8 minutes).
 `rustabletop schema <project> --json` describes an existing project; `rustabletop skill install --dir <project>`
 adds the skill ([`skills/rustabletop/`](skills/rustabletop/SKILL.md)) to one. Releases also ship
