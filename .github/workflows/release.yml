@@ -16,6 +16,8 @@ jobs:
             os: ubuntu-22.04
           - target: aarch64-apple-darwin
             os: macos-14
+          - target: x86_64-pc-windows-msvc
+            os: windows-latest
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -27,11 +29,15 @@ jobs:
           key: ${{ matrix.target }}
       - run: cargo build --release --locked -p rustabletop --target ${{ matrix.target }}
       - run: target/${{ matrix.target }}/release/rustabletop --version
-      - run: tar -czf rustabletop-${{ matrix.target }}.tar.gz -C target/${{ matrix.target }}/release rustabletop
+      - if: runner.os != 'Windows'
+        run: tar -czf rustabletop-${{ matrix.target }}.tar.gz -C target/${{ matrix.target }}/release rustabletop
+      - if: runner.os == 'Windows'
+        shell: pwsh
+        run: Compress-Archive -Path target/${{ matrix.target }}/release/rustabletop.exe -DestinationPath rustabletop-${{ matrix.target }}.zip
       - uses: actions/upload-artifact@v4
         with:
           name: rustabletop-${{ matrix.target }}
-          path: rustabletop-${{ matrix.target }}.tar.gz
+          path: rustabletop-${{ matrix.target }}.*
 
   release:
     needs: build
