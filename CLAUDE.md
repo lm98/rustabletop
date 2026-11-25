@@ -9,8 +9,7 @@ use it through `rtt ... --json` without human fixes.
 
 ## Design docs
 
-Scope, decisions and milestone specs live in the claude.ai project "rustabletop",
-not in this repo:
+Scope, decisions and milestone specs live in the `docs/` directory in this repo:
 - `Decisioni v0.1.md` — scope, out-of-scope list (with re-entry conditions), milestones
 - `Spec M<n> — ….md` — the spec for the milestone being implemented
 
