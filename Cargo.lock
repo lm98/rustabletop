@@ -2137,18 +2137,28 @@ dependencies = [
 ]
 
 [[package]]
-name = "rtt-cli"
+name = "rust_decimal"
+version = "1.43.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7653272e75dcac41dc199fbea6f5797633994fafd339943c06c9af16bf29cd3a"
+dependencies = [
+ "arrayvec",
+ "num-traits",
+]
+
+[[package]]
+name = "rustabletop"
 version = "0.0.1"
 dependencies = [
  "anyhow",
  "clap",
- "rtt-core",
+ "rustabletop-core",
  "serde",
  "serde_json",
 ]
 
 [[package]]
-name = "rtt-core"
+name = "rustabletop-core"
 version = "0.0.1"
 dependencies = [
  "anyhow",
@@ -2164,16 +2174,6 @@ dependencies = [
  "typst-layout",
  "typst-pdf",
  "typst-render",
-]
-
-[[package]]
-name = "rust_decimal"
-version = "1.43.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7653272e75dcac41dc199fbea6f5797633994fafd339943c06c9af16bf29cd3a"
-dependencies = [
- "arrayvec",
- "num-traits",
 ]
 
 [[package]]

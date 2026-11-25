@@ -1,15 +1,16 @@
 [package]
-name = "rtt-cli"
+name = "rustabletop"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+repository.workspace = true
 
 [[bin]]
-name = "rtt"
+name = "rustabletop"
 path = "src/main.rs"
 
 [dependencies]
-rtt-core.workspace = true
+rustabletop-core.workspace = true
 anyhow.workspace = true
 serde.workspace = true
 serde_json.workspace = true

@@ -20,9 +20,9 @@ examples/sigilli/
 ```
 
 ```sh
-cargo run -p rtt-cli -- check examples/sigilli          # human-readable
-cargo run -p rtt-cli -- check examples/sigilli --json   # for agents
-cargo run -p rtt-cli -- build examples/sigilli          # out/sigilli-pnp.pdf + out/<component>/<id>-<face>.png
+cargo run -p rustabletop -- check examples/sigilli          # human-readable
+cargo run -p rustabletop -- check examples/sigilli --json   # for agents
+cargo run -p rustabletop -- build examples/sigilli          # out/sigilli-pnp.pdf + out/<component>/<id>-<face>.png
 ```
 
 ### Components
@@ -71,7 +71,7 @@ Backgrounds should overflow the contour, as for cards.
   `ctx.components` maps every component id to its `(kind, shape, trim, bleed)`, e.g. `ctx.components.unit-card.trim`.
 - `rich(text)` replaces `:name:` with the icons declared in the manifest without changing line spacing.
 - `fit(body, max: 9pt, min: 5.5pt, field: none)` shrinks text to its container; if it does not fit at `min`,
-  `rtt build` reports `render.overflow` at the record (at the field, when `field` is given).
+  `rustabletop build` reports `render.overflow` at the record (at the field, when `field` is given).
 - `safe-area(ctx, inset:)` places content in the largest rectangle inscribed in the shape, shrunk by `inset`.
 - `outline(ctx, inset:, ..args)` draws the shape's contour shrunk by `inset` (`fill`, `stroke` as for `rect`).
 - `icon-image(name, ..args)` is a declared icon as a free-standing image; `art(path, placeholder:)` shows an image or a placeholder.
@@ -124,9 +124,9 @@ unknown keywords are rejected and records reject undeclared fields by default.
 ## Layout
 
 ```
-crates/rtt-core   manifest + data loading with source positions, schema validation, imposition, build (generated Typst main + virtual JSON data), Typst World (project-confined files, project fonts only, embedded `@rtt/std`), PDF/PNG export, diagnostics
-crates/rtt-core/typst/std   the `@rtt/std` Typst package, embedded in the binary
-crates/rtt-cli    `rtt` binary (`check`, `build`, low-level `render`)
+crates/rustabletop-core   manifest + data loading with source positions, schema validation, imposition, build (generated Typst main + virtual JSON data), Typst World (project-confined files, project fonts only, embedded `@rtt/std`), PDF/PNG export, diagnostics
+crates/rustabletop-core/typst/std   the `@rtt/std` Typst package, embedded in the binary
+crates/rustabletop    `rustabletop` binary (`check`, `build`, low-level `render`)
 examples/sigilli  reference project
 spike/m0a         pure-Typst print-and-play spike: card.typ (faces), pnp.typ (imposition), cards.typ (one card per page)
 ```
@@ -136,9 +136,9 @@ spike/m0a         pure-Typst print-and-play spike: card.typ (faces), pnp.typ (im
 ```sh
 cargo build --release
 cd spike/m0a
-../../target/release/rtt render pnp.typ --font-path fonts --out out
-../../target/release/rtt render cards.typ -f png --font-path fonts --out out --input id=ash-titan
-../../target/release/rtt render pnp.typ --font-path fonts --input data=cards.csv --json
+../../target/release/rustabletop render pnp.typ --font-path fonts --out out
+../../target/release/rustabletop render cards.typ -f png --font-path fonts --out out --input id=ash-titan
+../../target/release/rustabletop render pnp.typ --font-path fonts --input data=cards.csv --json
 ```
 
 `build.py` renders the same spike through the `typst` Python package, without Rust.

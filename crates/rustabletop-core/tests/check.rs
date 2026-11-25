@@ -1,6 +1,6 @@
 use std::path::{Path, PathBuf};
 
-use rtt_core::{Diagnostic, check};
+use rustabletop_core::{Diagnostic, check};
 
 fn fixture(name: &str) -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
