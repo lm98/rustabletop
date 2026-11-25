@@ -5,7 +5,7 @@ printable and digital artifacts. Rendering is delegated to an embedded Typst;
 rustabletop owns validation, instance expansion, imposition and export.
 
 The first user is an LLM agent: every feature is judged by how well an agent can
-use it through `rtt ... --json` without human fixes.
+use it through `rustabletop ... --json` without human fixes.
 
 ## Design docs
 
@@ -19,9 +19,9 @@ status in `Decisioni v0.1.md`. Do not expand scope beyond the spec: propose inst
 ## Layout
 
 ```
-crates/rtt-core   manifest, data loading with source positions, schema, Typst World, diagnostics
-crates/rtt-cli    the `rtt` binary
-examples/sigilli  reference project — must always pass `rtt check` (and `rtt build` from M2)
+crates/rustabletop-core   manifest, data loading with source positions, schema, Typst World, diagnostics
+crates/rustabletop    the `rustabletop` binary
+examples/sigilli  reference project — must always pass `rustabletop check` (and `rustabletop build` from M2)
 spike/m0a         frozen M0 spike, reference only; do not extend
 ```
 
@@ -31,7 +31,7 @@ spike/m0a         frozen M0 spike, reference only; do not extend
 cargo fmt --all --check
 cargo clippy --all-targets -- -D warnings
 cargo test
-cargo run -p rtt-cli -- check examples/sigilli [--json]
+cargo run -p rustabletop -- check examples/sigilli [--json]
 ```
 
 CI runs exactly these. A cold release build takes ~8 min (Typst); prefer `cargo check`
@@ -65,7 +65,7 @@ while iterating.
 
 ## Tests
 
-- Unit tests next to the code; integration tests in `crates/rtt-core/tests/` with
+- Unit tests next to the code; integration tests in `crates/rustabletop-core/tests/` with
   on-disk fixtures in `tests/fixtures/<case>/` (minimal manifest + data + stub face).
 - Every milestone exit criterion has a named test (e.g. `m1_exit_criterion_…`).
 - Assert on diagnostic `code`, location line and subject, not on message wording.

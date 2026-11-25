@@ -1,7 +1,7 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use rtt_core::{BuildOptions, Built, Diagnostic, Page, Plan, Severity, build, check};
+use rustabletop_core::{BuildOptions, Built, Diagnostic, Page, Plan, Severity, build, check};
 
 fn example() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../../examples/sigilli")

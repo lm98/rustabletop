@@ -23,7 +23,7 @@ Il valore non sta nel "dati → carte → PDF", già coperto da nanDECK, Squib, 
 ## 3. Decisioni tecniche
 
 ### 3.1 Architettura
-- **Rust**, workspace a 2 crate: `rtt-core` (lib) e `rtt-cli` (binario `rtt`). Nuovi crate solo quando un confine si è dimostrato reale.
+- **Rust**, workspace a 2 crate: `rustabletop-core` (lib) e `rustabletop` (binario `rustabletop`). Nuovi crate solo quando un confine si è dimostrato reale.
 - **Typst incorporato come libreria** (`typst`, `typst-pdf`, `typst-render`, `typst-layout`), versione **fissata con `=`** (oggi 0.15.1). Gli upgrade sono deliberati: l'API cambia tra versioni minori (verificato nello spike: path e FileId riscritti in 0.15).
 - `World` proprietario: file confinati alla root del progetto, **niente font di sistema** (solo quelli incorporati in Typst + `fonts/` del progetto), `today() = None`. Risultato: build deterministico.
 
@@ -45,7 +45,7 @@ Il valore non sta nel "dati → carte → PDF", già coperto da nanDECK, Squib, 
 - *(M1)* Il **sottoinsieme di JSON Schema è chiuso**: le parole chiave non elencate vengono rifiutate, con suggerimento. JSON Schema ignorerebbe un `enumm` lasciando il campo senza vincoli.
 - *(M1)* Nel CSV i valori sono convertiti **secondo il tipo dichiarato** nello schema; un valore non convertibile resta stringa e produce un errore di tipo localizzato.
 - *(M1)* Ogni diagnostica ha un **codice stabile** (`data.enum`, `data.type`, `data.required`, `data.unknown-field`, `data.duplicate-id`, `manifest.schema`, `csv.syntax`, …) e suggerimenti (`allowed values`, `did you mean`).
-- *(M2)* Formati custom nello schema: `format: rich-text` (le icone `:nome:` devono essere dichiarate) e `format: asset` (il file deve esistere), verificati da `rtt check`.
+- *(M2)* Formati custom nello schema: `format: rich-text` (le icone `:nome:` devono essere dichiarate) e `format: asset` (il file deve esistere), verificati da `rustabletop check`.
 
 ### 3.4 Template
 - **Il linguaggio dei template è Typst**, senza un linguaggio di layout YAML intermedio. Questo abbandona l'idea di "template visuali dichiarativi" del design iniziale (sez. 6.5, 7): Typst è già deterministico, sandboxed e dichiarativo quanto serve.
@@ -63,12 +63,13 @@ Il valore non sta nel "dati → carte → PDF", già coperto da nanDECK, Squib, 
 ### 3.6 Integrazione agente
 - **Prima la CLI, poi MCP.** Comandi con `--json`: `schema`, `check`, `build`, `render` (anteprima PNG di una singola istanza).
 - Una **skill Claude** nel repo (`skills/rustabletop/SKILL.md`) descrive formato, stdlib e ciclo di lavoro per **tutti e tre i kind**. Funziona in Claude Code e in qualsiasi sessione con una shell.
-- Il server MCP sarà un adapter sottile sopra `rtt-core`, dopo la v0.1.
+- Il server MCP sarà un adapter sottile sopra `rustabletop-core`, dopo la v0.1.
 
 ### 3.7 Pubblicazione *(25/11/2026)*
 - Repo pubblico (`lm98/rustabletop`). Licenza **MIT OR Apache-2.0**, come da convenzione dell'ecosistema Rust e compatibile con Typst (Apache-2.0); file `LICENSE-MIT` e `LICENSE-APACHE` nella root.
 - I font nei progetti di esempio sono OFL, con il loro file di licenza accanto.
 - Stato dichiarato nel README: pre-alpha, formato non stabile fino a `v0.1.0`.
+- **Nome:** il binario si chiama `rustabletop`, come repo e crate (prima era `rtt`, che collideva con il Real-Time Transfer dell'ecosistema embedded). Crate: `rustabletop-core` (lib) e `rustabletop` (CLI). Per un tool agent-first la lunghezza non pesa: conta che il nome sia univoco. Il namespace del pacchetto Typst resta `@rtt/std`, perché è virtuale e servito solo dal nostro `World`, quindi non collide con niente.
 
 ## 4. Fuori scope v0.1 (con condizione per riconsiderare)
 
@@ -88,11 +89,11 @@ Il valore non sta nel "dati → carte → PDF", già coperto da nanDECK, Squib, 
 | # | Contenuto | Criterio di uscita |
 |---|---|---|
 | **M0** ✅ | Spike Typst puro + spike Typst in Rust | Fatto: vedi §6 |
-| **M1** ✅ | Manifest, schema, caricamento YAML/CSV, `rtt check --json` | `qty: three` e `suit: aira` producono due diagnostiche che indicano file, riga e campo, con i valori ammessi |
-| **M2** ✅ | Contratto delle facce, `@rtt/std`, dati virtuali, imposition generata, `rtt build` (PR #2) | Il mazzo dello spike si ricostruisce dal manifest; overflow e icone sconosciute sono diagnostiche localizzate; build deterministico |
+| **M1** ✅ | Manifest, schema, caricamento YAML/CSV, `rustabletop check --json` | `qty: three` e `suit: aira` producono due diagnostiche che indicano file, riga e campo, con i valori ammessi |
+| **M2** ✅ | Contratto delle facce, `@rtt/std`, dati virtuali, imposition generata, `rustabletop build` (PR #2) | Il mazzo dello spike si ricostruisce dal manifest; overflow e icone sconosciute sono diagnostiche localizzate; build deterministico |
 | **M2.5** ✅ | Modello dei componenti generalizzato + kind `token` | Fatto: carte con lo stesso layout di M2, Sigillo `circle`/`fold` e Vortice `hex` a faccia singola in `examples/sigilli` con linee di taglio, test del fold, `manifest.face` sulle facce sconosciute, rettangolo inscritto testato; build deterministico |
 | **M2.6** ✅ | Kind `board` (tiles / poster, `fields` inline), griglie `hex`/`square` con `format: grid-cell`, geometria condivisa (`ctx.components`, `grid.cell: <id>`), istruzioni di montaggio, linee di taglio a doppia traccia | Fatto: `dungeon-map` 500×350 in `examples/sigilli` con `fields` inline e griglia `hex` da `vortex`, 4 sezioni A4 + pagina di montaggio; test di copertura delle sezioni, `poster`, griglia, `data.grid-cell`, `manifest.grid` con `did you mean`, `back` su `tiles`; doppia traccia verificata sui render; build deterministico |
-| **M3** | Ciclo agente: `rtt schema`, `rtt render <id>`, `rtt new`, skill a strati per card/token/board, `render.low-resolution`, modalità bozza (`ctx.draft`), binari precompilati con `install.sh` | Valutazione con 3 brief in sessioni nuove: almeno 2/3 senza interventi, con check e build puliti (Spec M3 §9) |
+| **M3** | Ciclo agente: `rustabletop schema`, `rustabletop render <id>`, `rustabletop new`, skill a strati per card/token/board, `render.low-resolution`, modalità bozza (`ctx.draft`), binari precompilati con `install.sh` | Valutazione con 3 brief in sessioni nuove: almeno 2/3 senza interventi, con check e build puliti (Spec M3 §9) |
 | **M4** | Export TTS (Deck, Custom Token, Custom Board) | Il gioco si importa in TTS ed è giocabile |
 
 Backlog dopo v0.1: watch mode, MCP, forme da SVG, disposizione a nido d'ape degli esagoni, export SVG di taglio, pacchetti Typst Universe, pipeline di asset/illustrazioni, preset print-on-demand, pubblicazione.
@@ -137,7 +138,6 @@ Backlog dopo v0.1: watch mode, MCP, forme da SVG, disposizione a nido d'ape degl
 - **Churn dell'API Typst:** versione fissata, upgrade in branch dedicati.
 - **Familiarità degli LLM con Typst inferiore a HTML/SVG:** la stdlib riduce la superficie da scrivere, la skill include esempi completi.
 - **Clip su forme non rettangolari:** verificato in M2.5, Typst 0.15.1 non ha clip su path arbitrario (solo `radius` sui box). Si usa il clip rettangolare sul riquadro + bleed e la linea di taglio sul contorno.
-- **Nome del binario `rtt`:** collide con RTT (Real-Time Transfer, ecosistema embedded/probe-rs). Il repo è pubblico dal 25/11/2026: va deciso prima della prima release (`v0.1.0-alpha.1`, fine M3), perché dopo il nome finisce in skill, script di installazione e progetti generati.
 
 ## 8. Questioni aperte
 

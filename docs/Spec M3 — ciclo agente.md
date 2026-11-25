@@ -7,11 +7,11 @@
 
 ## 0. Obiettivo
 
-Un agente che non ha mai visto rustabletop, con a disposizione solo la skill e il binario `rtt`, crea un mini-gioco stampabile con carte, gettoni e plancia **senza interventi umani** (criterio misurabile in §9).
+Un agente che non ha mai visto rustabletop, con a disposizione solo la skill e il binario `rustabletop`, crea un mini-gioco stampabile con carte, gettoni e plancia **senza interventi umani** (criterio misurabile in §9).
 
-Tutto quello che segue serve quel criterio. In ordine di peso: `rtt new` (§3), distribuzione del binario (§8), protocollo di valutazione (§9).
+Tutto quello che segue serve quel criterio. In ordine di peso: `rustabletop new` (§3), distribuzione del binario (§8), protocollo di valutazione (§9).
 
-## 1. `rtt schema [PROJECT] --json`
+## 1. `rustabletop schema [PROJECT] --json`
 
 La descrizione completa del progetto, cioè la prima chiamata che un agente fa su un progetto esistente:
 
@@ -40,30 +40,30 @@ La descrizione completa del progetto, cioè la prima chiamata che un agente fa s
 - Funziona anche su un progetto con errori: restituisce quello che è riuscito a risolvere più le diagnostiche, con lo stesso formato del report di `check`.
 - Senza `--json` stampa un riassunto leggibile.
 
-## 2. `rtt render <component>/<instance> [PROJECT]`
+## 2. `rustabletop render <component>/<instance> [PROJECT]`
 
 ```
-rtt render dungeon-map/dungeon-map --face front --out preview/ --ppi 150 --json
+rustabletop render dungeon-map/dungeon-map --face front --out preview/ --ppi 150 --json
 ```
 
 - Compila **solo** l'istanza richiesta e scrive un PNG per faccia (tutte, se manca `--face`). Report `{ ok, artifacts, diagnostics }`, overflow compresi.
 - Per le board produce l'intera plancia in una sola immagine, non le sezioni.
 - `--ppi` di default 150: basta per un controllo visivo e mantiene leggere le immagini che l'agente deve guardare.
-- Il vecchio `rtt render <entry.typ>` di basso livello (usato solo dallo spike) diventa `rtt typst <entry.typ>`, nascosto da `--help`. Va aggiornato il README dello spike.
+- Il vecchio `rustabletop render <entry.typ>` di basso livello (usato solo dallo spike) diventa `rustabletop typst <entry.typ>`, nascosto da `--help`. Va aggiornato il README dello spike.
 
-## 3. `rtt new <dir>`
+## 3. `rustabletop new <dir>`
 
 Crea un progetto iniziale **funzionante**, su cui l'agente lavora modificando invece di partire da zero.
 
 ```
-rtt new my-game [--paper a4|letter]
+rustabletop new my-game [--paper a4|letter]
 ```
 
 - Contenuto: `game.yaml` con tre componenti, cioè una carta (`card`, poker, fronte e retro), un gettone (`token`, `circle`, piega e incolla) e una plancia (`board`, griglia `hex` con `cell` preso dal gettone, `fields` inline). In più i dati YAML con 2-3 istanze, un template per componente, due icone SVG e un `.gitignore` con `out/`.
 - Font: solo quelli incorporati in Typst, niente cartella `fonts/`. L'avvio resta leggero e senza problemi di licenza.
 - I template usano **tutto quello che la skill insegna**: `ctx.trim`/`ctx.shape` invece di misure scritte a mano, `safe-area`, `fit(…, field:)`, `rich`, `art` con segnaposto, `ctx.draft`, `draw-grid` e `ctx.components`. È l'esempio canonico: se la skill e il progetto iniziale divergono, vale il progetto iniziale.
-- I file sono **incorporati nel binario**. `rtt new` su una cartella non vuota fallisce, senza sovrascrivere niente.
-- Test: `rtt new` seguito da `check` e `build` non produce né errori né avvisi.
+- I file sono **incorporati nel binario**. `rustabletop new` su una cartella non vuota fallisce, senza sovrascrivere niente.
+- Test: `rustabletop new` seguito da `check` e `build` non produce né errori né avvisi.
 
 ## 4. Skill
 
@@ -80,8 +80,8 @@ skills/rustabletop/
 ```
 
 **`SKILL.md`** (corto, idealmente sotto le 150 righe):
-- **Installazione** (§8) e verifica con `rtt --version`.
-- **Ciclo di lavoro:** `rtt new` → modifica dei dati e dei template → `rtt check --json` → `rtt render <id>` su ciò che hai toccato → **guarda il PNG** → `rtt build`.
+- **Installazione** (§8) e verifica con `rustabletop --version`.
+- **Ciclo di lavoro:** `rustabletop new` → modifica dei dati e dei template → `rustabletop check --json` → `rustabletop render <id>` su ciò che hai toccato → **guarda il PNG** → `rustabletop build`.
 - **Regole d'oro:**
   - dati in YAML;
   - non impostare mai la pagina nei template;
@@ -109,7 +109,7 @@ warning[render.low-resolution]: `art` of dungeon-map/dungeon-map prints at 96 dp
 
 ## 6. Modalità bozza
 
-- `rtt build --draft` e `rtt render --draft`: `ctx.draft` vale `true` in tutti i template.
+- `rustabletop build --draft` e `rustabletop render --draft`: `ctx.draft` vale `true` in tutti i template.
 - `art()` in bozza disegna solo il contorno del segnaposto, senza riempimento e senza immagine. Deve saperlo senza ricevere `ctx`: per esempio da un file virtuale del pacchetto `@rtt/std` servito dal `World`, da decidere in implementazione.
 - Convenzione per i template, insegnata dalla skill e usata dal progetto iniziale: in bozza niente sfondi pieni, solo contorni e testo.
 - Il PDF in bozza si chiama `<game>-pnp-draft.pdf`, per non confonderlo con quello finale.
@@ -120,15 +120,15 @@ M3 aggiunge solo `ctx.draft` (§6). Tutto il resto del formato resta invariato.
 
 ## 8. Distribuzione del binario
 
-- Workflow di **release** su tag `v*`: compila `rtt` per Linux x86_64 e macOS aarch64 (Windows facoltativo) e pubblica gli archivi nella release di GitHub.
+- Workflow di **release** su tag `v*`: compila `rustabletop` per Linux x86_64 e macOS aarch64 (Windows facoltativo) e pubblica gli archivi nella release di GitHub.
 - `install.sh` nella root del repo: scarica con `curl` il binario della piattaforma corrente dall'ultima release pubblica e lo installa in `~/.local/bin`. Il repo è pubblico dal 25/11/2026, quindi non serve autenticazione. Uso previsto nella skill: `curl -fsSL https://raw.githubusercontent.com/lm98/rustabletop/main/install.sh | sh`.
 - Lo script deve fallire con un messaggio chiaro se la piattaforma non è supportata o se non esiste ancora una release, indicando il ripiego `cargo install`.
-- La skill riporta l'installazione in una riga, più il ripiego `cargo install --git … rtt-cli`, che richiede circa 8 minuti.
+- La skill riporta l'installazione in una riga, più il ripiego `cargo install --git … rustabletop`, che richiede circa 8 minuti.
 - Prima release: `v0.1.0-alpha.1`, alla chiusura di M3.
 
 ## 9. Criterio di uscita: valutazione con tre brief
 
-**Protocollo.** Ogni brief viene eseguito in una **sessione nuova**, con solo la skill e `rtt` installato tramite `install.sh`. Il messaggio iniziale è il brief e nient'altro.
+**Protocollo.** Ogni brief viene eseguito in una **sessione nuova**, con solo la skill e `rustabletop` installato tramite `install.sh`. Il messaggio iniziale è il brief e nient'altro.
 - Conta come **intervento** qualsiasi messaggio umano successivo al brief.
 - L'agente prende da solo le decisioni di design. Se si ferma a fare domande di design, conta come intervento.
 
@@ -139,7 +139,7 @@ M3 aggiunge solo `ctx.draft` (§6). Tutto il resto del formato resta invariato.
 
 **Successo di ogni brief:**
 - zero interventi;
-- `rtt check` senza errori e `rtt build` senza avvisi;
+- `rustabletop check` senza errori e `rustabletop build` senza avvisi;
 - PDF e PNG coerenti col brief (verifica visiva umana).
 
 **Soglia:** **almeno 2 brief su 3** superati. Ogni fallimento produce una correzione alla skill, al progetto iniziale o alle diagnostiche; il brief fallito si ripete dopo la correzione.
@@ -148,7 +148,7 @@ M3 aggiunge solo `ctx.draft` (§6). Tutto il resto del formato resta invariato.
 
 ## 10. Criteri tecnici di uscita (oltre a §9)
 
-- Test: `rtt new` → `check` → `build` senza diagnostiche; `rtt schema --json` sull'esempio e su un progetto con errori; `rtt render` di un'istanza per ogni kind; un test di `render.low-resolution` su un'immagine piccola; un test di bozza (`ctx.draft` arriva ai template e `art` non incorpora l'immagine).
+- Test: `rustabletop new` → `check` → `build` senza diagnostiche; `rustabletop schema --json` sull'esempio e su un progetto con errori; `rustabletop render` di un'istanza per ogni kind; un test di `render.low-resolution` su un'immagine piccola; un test di bozza (`ctx.draft` arriva ai template e `art` non incorpora l'immagine).
 - Test di coerenza della skill (§4).
 - Workflow di release eseguito almeno una volta su un tag di prova.
 - `examples/sigilli` aggiornato per rispettare `ctx.draft`.

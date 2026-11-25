@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["crates/rtt-core", "crates/rtt-cli"]
+members = ["crates/rustabletop-core", "crates/rustabletop"]
 
 [workspace.package]
 version = "0.0.1"
@@ -18,4 +18,4 @@ anyhow = "1"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 clap = { version = "4", features = ["derive"] }
-rtt-core = { path = "crates/rtt-core" }
+rustabletop-core = { path = "crates/rustabletop-core" }

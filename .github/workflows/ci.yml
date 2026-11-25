@@ -17,5 +17,5 @@ jobs:
       - run: cargo fmt --all --check
       - run: cargo clippy --all-targets -- -D warnings
       - run: cargo test
-      - run: cargo run -p rtt-cli -- check examples/sigilli
-      - run: cargo run -p rtt-cli -- build examples/sigilli --out target/sigilli --ppi 72
+      - run: cargo run -p rustabletop -- check examples/sigilli
+      - run: cargo run -p rustabletop -- build examples/sigilli --out target/sigilli --ppi 72

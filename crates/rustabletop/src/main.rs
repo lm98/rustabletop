@@ -4,11 +4,11 @@ use std::process::ExitCode;
 
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand, ValueEnum};
-use rtt_core::{Diagnostic, ProjectWorld};
+use rustabletop_core::{Diagnostic, ProjectWorld};
 
 #[derive(Parser)]
 #[command(
-    name = "rtt",
+    name = "rustabletop",
     version,
     about = "rustabletop — tabletop components from data"
 )]
@@ -123,7 +123,7 @@ struct ComponentSummary {
 }
 
 fn check(args: &CheckArgs) -> ExitCode {
-    let checked = rtt_core::check(&args.project);
+    let checked = rustabletop_core::check(&args.project);
     let ok = checked.ok();
     let summary = checked.project.as_ref().map(|p| Summary {
         game: p.game.clone(),
@@ -179,8 +179,8 @@ fn check(args: &CheckArgs) -> ExitCode {
 
 fn build(args: &BuildArgs) -> ExitCode {
     let out = args.out.clone().unwrap_or_else(|| args.project.join("out"));
-    let options = rtt_core::BuildOptions { out, ppi: args.ppi };
-    let built = match rtt_core::build(&args.project, &options) {
+    let options = rustabletop_core::BuildOptions { out, ppi: args.ppi };
+    let built = match rustabletop_core::build(&args.project, &options) {
         Ok(built) => built,
         Err(e) => {
             eprintln!("error: {e:#}");
@@ -231,7 +231,7 @@ fn render(args: &RenderArgs) -> Result<Report> {
         &args.font_paths,
         args.inputs.clone(),
     )?;
-    let compiled = match rtt_core::compile(&world) {
+    let compiled = match rustabletop_core::compile(&world) {
         Ok(c) => c,
         Err(diagnostics) => {
             return Ok(Report {
@@ -253,7 +253,7 @@ fn render(args: &RenderArgs) -> Result<Report> {
 
     match args.format {
         Format::Pdf => {
-            let bytes = match rtt_core::export_pdf(&world, &compiled.document) {
+            let bytes = match rustabletop_core::export_pdf(&world, &compiled.document) {
                 Ok(b) => b,
                 Err(diagnostics) => {
                     return Ok(Report {
@@ -268,7 +268,7 @@ fn render(args: &RenderArgs) -> Result<Report> {
             artifacts.push(path.display().to_string());
         }
         Format::Png => {
-            for (i, png) in rtt_core::export_pngs(&compiled.document, args.ppi)?
+            for (i, png) in rustabletop_core::export_pngs(&compiled.document, args.ppi)?
                 .into_iter()
                 .enumerate()
             {
