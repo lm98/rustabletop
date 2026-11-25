@@ -1,5 +1,6 @@
 use serde::Serialize;
 
+use crate::board::{Assembly, Tile};
 use crate::component::{Kind, Production, Sides};
 use crate::project::{DuplexEdge, Print};
 use crate::units::Size;
@@ -35,8 +36,27 @@ impl Layout {
 }
 
 #[derive(Debug, Clone, Serialize)]
+#[serde(tag = "type", rename_all = "lowercase")]
+pub enum Page {
+    Sheet(Sheet),
+    Tile(Tile),
+    Assembly(Assembly),
+}
+
+impl Page {
+    pub fn component(&self) -> usize {
+        match self {
+            Page::Sheet(s) => s.component,
+            Page::Tile(t) => t.component,
+            Page::Assembly(a) => a.component,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize)]
 pub struct Sheet {
     pub component: usize,
+    pub page: (f64, f64),
     pub cells: Vec<Cell>,
     pub marks: Vec<Line>,
     pub cut_lines: bool,
@@ -98,6 +118,7 @@ pub fn grid(layout: &Layout) -> Option<Grid> {
     match layout.kind {
         Kind::Card => card_grid(layout),
         Kind::Token => token_grid(layout),
+        Kind::Board => None,
     }
 }
 
@@ -149,10 +170,11 @@ pub fn sheets(component: usize, copies: &[usize], layout: &Layout, grid: &Grid) 
     for chunk in copies.chunks(grid.per_sheet()) {
         let fronts = match layout.kind {
             Kind::Card => card_cells(grid, chunk, layout.bleed),
-            Kind::Token => token_cells(grid, chunk, layout.bleed),
+            Kind::Token | Kind::Board => token_cells(grid, chunk, layout.bleed),
         };
         let sheet = |cells: Vec<Cell>, fold: Option<Line>| Sheet {
             component,
+            page: layout.paper,
             cells,
             marks: marks.clone(),
             cut_lines: layout.production.cut_lines,

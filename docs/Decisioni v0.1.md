@@ -1,6 +1,6 @@
 # rustabletop — Decisioni v0.1
 
-**Stato:** M0, M1, M2, M2.5 completati (M2 con la PR #2, M2.5 con la PR #3, 24/11/2026). Prossima: M2.6 (`board`), vedi "Spec M2.6 — board.md".
+**Stato:** M0, M1, M2, M2.5, M2.6 completati (M2 con la PR #2, M2.5 con la PR #3, M2.6 sul branch `m2.6-board`, 25/11/2026). Prossima: M3 (ciclo agente).
 **Sostituisce, per lo scope:** le sezioni 5–6, 9, 11–12 del "Design iniziale". I principi delle sezioni 1–2 restano validi come direzione di lungo periodo.
 
 ---
@@ -86,7 +86,7 @@ Il valore non sta nel "dati → carte → PDF", già coperto da nanDECK, Squib, 
 | **M1** ✅ | Manifest, schema, caricamento YAML/CSV, `rtt check --json` | `qty: three` e `suit: aira` producono due diagnostiche che indicano file, riga e campo, con i valori ammessi |
 | **M2** ✅ | Contratto delle facce, `@rtt/std`, dati virtuali, imposition generata, `rtt build` (PR #2) | Il mazzo dello spike si ricostruisce dal manifest; overflow e icone sconosciute sono diagnostiche localizzate; build deterministico |
 | **M2.5** ✅ | Modello dei componenti generalizzato + kind `token` | Fatto: carte con lo stesso layout di M2, Sigillo `circle`/`fold` e Vortice `hex` a faccia singola in `examples/sigilli` con linee di taglio, test del fold, `manifest.face` sulle facce sconosciute, rettangolo inscritto testato; build deterministico |
-| **M2.6** | Kind `board` (tiles / poster, `fields` inline), griglie `hex`/`square` con `format: grid-cell`, geometria condivisa (`ctx.components`, `grid.cell: <id>`), istruzioni di montaggio, linee di taglio a doppia traccia | Vedi "Spec M2.6 — board.md" §7 |
+| **M2.6** ✅ | Kind `board` (tiles / poster, `fields` inline), griglie `hex`/`square` con `format: grid-cell`, geometria condivisa (`ctx.components`, `grid.cell: <id>`), istruzioni di montaggio, linee di taglio a doppia traccia | Fatto: `dungeon-map` 500×350 in `examples/sigilli` con `fields` inline e griglia `hex` da `vortex`, 4 sezioni A4 + pagina di montaggio; test di copertura delle sezioni, `poster`, griglia, `data.grid-cell`, `manifest.grid` con `did you mean`, `back` su `tiles`; doppia traccia verificata sui render; build deterministico |
 | **M3** | Ciclo agente: `schema`/`render --json`, skill per card, token, board; avviso `render.low-resolution` per le immagini sotto i 200 dpi alla dimensione stampata | Claude crea un mini-gioco con carte, token e plancia senza correzioni manuali |
 | **M4** | Export TTS (Deck, Custom Token, Custom Board) | Il gioco si importa in TTS ed è giocabile |
 
@@ -115,8 +115,17 @@ Backlog dopo v0.1: watch mode, MCP, forme da SVG, disposizione a nido d'ape degl
 - Il rettangolo inscritto (`ctx.shape.inscribed`) è calcolato e testato in Rust: per il cerchio è il quadrato di lato d/√2; per l'esagono pointy è largo quanto la distanza tra i lati e alto la metà del riquadro (flat: trasposto). È la soluzione di area massima.
 - L'imposition dei token centra la griglia nell'area utile. Nel `fold` la griglia occupa la metà sinistra, fino a `gap/2` dall'asse, e i retri sono la riflessione delle celle rispetto all'asse. Le linee di taglio si stampano su entrambe le metà.
 - `cut-lines` vale true per default su tutti i token, compresi i `square`: con le celle distanziate serve comunque una guida per il taglio.
-- `board` non è ancora un valore ammesso di `kind`: arriva in M2.6.
 - Codice `manifest.size` riusato per gli errori sulla `size` delle forme; `manifest.shape` per `shape`, `orientation` e `radius`.
+
+## 6e. Note da M2.6
+
+- La griglia è interamente calcolata in Rust: `ctx.grid.centers` contiene già i centri in coordinate del canvas, e la stdlib (`draw-grid`, `cell-center`, `cells`, `cell-shape`) si limita a leggerli. I test verificano la dimensione delle celle uguale al token e la distanza `cell` tra i centri di tutte le celle adiacenti, per pointy e flat.
+- Le sezioni dei `tiles` hanno una cornice di 7 mm oltre il margine della stampante, per etichette, crocini del rifilo della plancia e segni di registro. L'orientamento della pagina (verticale/orizzontale) è scelto per minimizzare il numero di sezioni: la plancia 500×350 su A4 sta in 2×2 sezioni orizzontali.
+- La sovrapposizione è esattamente `overlap` tra sezioni consecutive; l'ultima sezione di ogni riga/colonna è più stretta. `overlap` è limitato a 50 mm.
+- Etichette: lettera per la riga, numero per la colonna (A1, A2, B1…). Il testo stampato usa DejaVu Sans Mono (incorporato in Typst), che ha il glifo ✂.
+- `format: grid-cell` può stare a qualsiasi profondità dello schema (es. `spaces[].at`): i formati custom ora seguono i percorsi annidati, e il campo nella diagnostica è il percorso puntato (`spaces.7.at`).
+- Le opzioni di `print` non ammesse per il kind ora puntano alla chiave stessa (es. `/print/crop-marks`), non a `print`.
+- La pagina di montaggio usa la prima istanza; con `qty > 1` le sezioni si ripetono per ogni copia.
 
 ## 7. Rischi
 
