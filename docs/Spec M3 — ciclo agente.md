@@ -157,3 +157,23 @@ M3 aggiunge solo `ctx.draft` (§6). Tutto il resto del formato resta invariato.
 ## 11. Fuori da M3
 
 Server MCP, watch mode, export TTS (M4), template dichiarativi (rivalutare con i risultati di §9: se i fallimenti si concentrano nei template Typst, la questione si riapre).
+
+## 12. Emendamento (25/11/2026, a implementazione avviata)
+
+Due punti mancavano nella versione originale. Il primo fa parte di M3; il secondo si può chiudere anche dopo il merge di M3, in una PR separata.
+
+### 12.1 Come la skill arriva all'agente (parte di M3)
+
+La skill va **incorporata nel binario**, come il progetto iniziale, così la sua versione coincide sempre con quella del tool.
+
+- **`rustabletop new <dir>`** scrive la skill anche in `<dir>/.claude/skills/rustabletop/`. Claude Code carica automaticamente le skill da quella cartella, quindi ogni sessione aperta sul progetto del gioco la trova senza configurazione.
+- **`rustabletop skill install [--dir <path>]`**: scrive la skill in `<path>/.claude/skills/rustabletop/`; il default è la directory corrente. Serve per i progetti esistenti. Se trova una versione diversa la sovrascrive e lo segnala nel report.
+- La **release** pubblica anche `rustabletop-skill.zip`, che contiene la cartella della skill, per caricarla nelle impostazioni delle skill di claude.ai.
+- **Protocollo di valutazione (§9):** la sessione nuova riceve la skill tramite `install.sh` seguito da `rustabletop new` (o `skill install`), non per copia manuale. Il percorso che si valuta è quello che userà un utente vero.
+- Test: dopo `rustabletop new`, il contenuto di `.claude/skills/rustabletop/` è identico a quello di `skills/rustabletop/` nel repo.
+
+### 12.2 Una sola documentazione utente (dopo M3)
+
+- I file `skills/rustabletop/reference/*.md` diventano **l'unica documentazione utente** (in inglese).
+- Il README si riduce a presentazione, installazione, avvio rapido (`install.sh` → `rustabletop new` → `build`) e link a `skills/rustabletop/reference/`. Le sezioni di riferimento oggi presenti nel README (kind, `ctx`, libreria, griglie, stampa) si spostano lì, senza duplicati.
+- Ruoli dei documenti: `docs/` è il design (italiano, per chi sviluppa); `skills/rustabletop/` è il riferimento utente (inglese, per agenti e persone); il README è l'ingresso.
