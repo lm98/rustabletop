@@ -80,13 +80,11 @@ pub fn spans(total: f64, window: f64, overlap: f64) -> Vec<(f64, f64)> {
     if total <= window + 1e-9 {
         return vec![(0.0, total)];
     }
-    let stride = window - overlap;
-    let count = ((total - overlap) / stride - 1e-9).ceil() as usize;
+    let count = ((total - overlap) / (window - overlap) - 1e-9).ceil() as usize;
+    let n = count as f64;
+    let width = (total + (n - 1.0) * overlap) / n;
     (0..count)
-        .map(|i| {
-            let start = i as f64 * stride;
-            (start, window.min(total - start))
-        })
+        .map(|i| (i as f64 * (width - overlap), width))
         .collect()
 }
 
@@ -391,6 +389,25 @@ mod tests {
                 .iter()
                 .all(|t| t.window.width <= max.0 + 1e-9 && t.window.height <= max.1 + 1e-9)
         );
+    }
+
+    #[test]
+    fn sections_share_the_board_evenly() {
+        let board = Board {
+            trim: (360.0, 250.0),
+            bleed: 3.0,
+        };
+        let layout = TileLayout::new(&board, A4, 5.0, 10.0).unwrap();
+        assert_eq!(layout.count(), 3);
+        let (w, _) = board.canvas();
+        let spans = if layout.cols.len() == 3 {
+            &layout.cols
+        } else {
+            &layout.rows
+        };
+        assert_covers(spans, w, 10.0);
+        assert!(spans.iter().all(|s| close(s.1, spans[0].1)));
+        assert!(spans[0].1 > 120.0);
     }
 
     #[test]

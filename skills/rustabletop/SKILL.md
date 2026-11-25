@@ -32,10 +32,13 @@ binary's version; `rustabletop skill install --dir <project>` does the same for 
 3. Edit `game.yaml`, `data/*.yaml`, `templates/*.typ`.
 4. `rustabletop check <dir> --json` — fix **every** error; warnings too unless you can say why not.
 5. `rustabletop render <component>/<instance> <dir>` for each template you touched, then **look at the
-   PNG** (it is printed on stdout; `--face front`, `--ppi 150` by default). One instance per
-   template is enough; check the longest text and the optional fields left empty.
+   PNGs**: one per face, listed on stdout (`artifacts` with `--json`). `--face front` renders one
+   face only; `--ppi 150` by default. A component with a single instance (a board with `fields`,
+   a token with one record and `qty: 10`) can be named alone: `rustabletop render board <dir>`.
+   Check the longest text and a record with its optional fields left empty.
 6. `rustabletop build <dir>` — `out/<game>-pnp.pdf` plus a PNG per face. It must end with
-   `0 warning(s)`. `--draft` builds a quick ink-saving proof (`<game>-pnp-draft.pdf`).
+   `0 warning(s)`. `--draft` builds a quick ink-saving proof (`<game>-pnp-draft.pdf`, PNGs ending
+   in `-draft`). Look at one page per component of the PDF too if you can rasterise it.
 
 Every command takes `--json`: `{ ok, diagnostics: [{ code, severity, message, location:
 { file, line, column }, subject: { component, instance, field }, hints }] }`. Apply the hints:

@@ -275,7 +275,8 @@ fn write_previews(
         let instance = &component.instances[preview.item];
         let dir = out.join(&component.id);
         fs::create_dir_all(&dir).with_context(|| format!("cannot create {}", dir.display()))?;
-        let path = dir.join(format!("{}-{}.png", instance.id, preview.face));
+        let suffix = if plan.draft { "-draft" } else { "" };
+        let path = dir.join(format!("{}-{}{suffix}.png", instance.id, preview.face));
         let png = typst_render::render(page, &render)
             .encode_png()
             .map_err(|e| anyhow::anyhow!("png encoding failed: {e}"))?;

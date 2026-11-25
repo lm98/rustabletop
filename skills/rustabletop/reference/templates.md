@@ -47,7 +47,7 @@ arrive as paths usable by `art()`; `grid-cell` fields as `(col, row)` arrays.
 | `draw-grid(grid, stroke:, fill:, inset:, cell:)` | Draws all cells of `ctx.grid`. `fill` is a colour or `(col, row) => colour`; `cell` is `(col, row) => content` centred in the cell. |
 | `cells(grid)` | Array of `(col, row, x, y)`: every cell centre in canvas coordinates. |
 | `cell-center(grid, col, row)` | `(x, y)` of one cell centre in canvas coordinates. |
-| `cell-shape(grid, inset: 0mm, ..args)` | One cell's outline, to `place` yourself. |
+| `cell-shape(grid, inset: 0mm, ..args)` | One cell's outline, to `place` yourself: its box is `grid.width × grid.height`, so place it at `dx: x - grid.width / 2, dy: y - grid.height / 2` from a cell centre. |
 
 Canvas coordinates include the bleed: use them directly with `place(top + left, dx: x, dy: y, …)`.
 
@@ -66,6 +66,13 @@ Canvas coordinates include the bleed: use them directly with `place(top + left, 
 - Numbers to text: `str(item.value)`. Dictionaries: `colors.at(item.suit)`;
   `dict.at(key, default: x)`. Loops: `for (i, name) in names.enumerate() { ... }`.
 - Field names may contain dashes: `item.max-hp` works.
+- Shared code: `#import "palette.typ": colors` imports another file next to the template
+  (paths are relative to the importing file).
+- Map cells to values with a dictionary keyed by `repr((col, row))`, as in the board pattern;
+  `dict.at(key, default: …)` gives every unlisted cell a default.
+- Icons are drawn with their own SVG colours, in draft mode too: for an icon on a coloured
+  background, declare a second, light-coloured version of the file (`heart-light`).
+- `fit` only shrinks: short texts keep `max` and leave room; size the box for the longest text.
 - Repeated decoration across faces: write a helper `#let frame(ctx, color) = { ... }` in the
   template file and call it from `front` and `back`.
 
@@ -106,9 +113,10 @@ Everything filled becomes an outline in draft: badges, cells, banners.
 
 ## Token pattern
 
-Tokens are circles, squares or hexes: draw the background over the whole canvas, the border
-with `outline`, the content with `safe-area` (the inscribed rectangle is small: keep 1-3 words
-or a number and an icon).
+Tokens are circles, squares or hexes: draw the background over the whole canvas (on the sheet a
+circle token then looks like a coloured square: that is the bleed, the cut line marks the
+shape), the border with `outline`, the content with `safe-area` (the inscribed rectangle is
+small: keep 1-3 words or a number and an icon).
 
 ```typst
 #let front(token, ctx) = {

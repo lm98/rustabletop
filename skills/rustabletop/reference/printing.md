@@ -34,8 +34,12 @@ and digital use). The PDF is meant to be printed at **100% / actual size**, neve
   neighbour aligning the marks, glue, then trim the outer edge.
 - `mode: poster`: one page as large as the board plus bleed, for a print shop or a large-format
   printer. The only mode that allows a `back`.
-- Paper and orientation are chosen automatically (fewest sections). A 360×250 board on A4 is
-  2×2 sections.
+- Paper orientation is chosen for the fewest sections, and the board is split into equal
+  sections. Each section holds at most `paper − 2 × (margin + 7mm)` per side: on A4 with 5mm
+  margins 273 × 186mm, on letter 255.4 × 191.9mm; consecutive sections share `overlap`. The
+  board plus 2 × bleed is what is split: a 500×350 board is 2×2 sections on A4, a 350×250 one
+  2 (portrait), a 360×250 one 3. Content crossing a seam is fine (the overlap is printed on
+  both sections), but keep small text off the seams if you can.
 
 ## Draft
 

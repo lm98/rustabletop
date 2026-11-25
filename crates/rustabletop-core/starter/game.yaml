@@ -51,7 +51,7 @@ components:
 
   - id: board
     kind: board
-    size: { width: 360mm, height: 250mm }
+    size: { width: 350mm, height: 250mm }
     bleed: 3mm
     schema:
       required: [title, spaces]
