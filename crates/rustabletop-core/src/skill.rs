@@ -1,12 +1,18 @@
 use std::fs;
+use std::io::{Cursor, Write};
 use std::path::Path;
 
 use anyhow::{Context, Result};
 use serde::Serialize;
+use zip::write::SimpleFileOptions;
+use zip::{CompressionMethod, DateTime, ZipWriter};
 
+pub const SKILL_NAME: &str = "rustabletop";
 pub const SKILL_DIR: &str = ".claude/skills/rustabletop";
+pub const SKILL_VERSION: &str = env!("CARGO_PKG_VERSION");
+pub const SKILL_VERSION_PLACEHOLDER: &str = "{{RUSTABLETOP_VERSION}}";
 
-pub const SKILL_FILES: &[(&str, &str)] = &[
+const SOURCES: &[(&str, &str)] = &[
     ("SKILL.md", include_str!("../skill/SKILL.md")),
     (
         "reference/manifest.md",
@@ -26,6 +32,19 @@ pub const SKILL_FILES: &[(&str, &str)] = &[
     ),
 ];
 
+/// The skill as written by `skill install` and `skill export`: paths relative to the
+/// skill folder, with the version placeholder replaced by this binary's version.
+pub fn skill_files() -> Vec<(&'static str, String)> {
+    SOURCES
+        .iter()
+        .map(|(rel, text)| (*rel, text.replace(SKILL_VERSION_PLACEHOLDER, SKILL_VERSION)))
+        .collect()
+}
+
+pub fn default_skill_zip() -> String {
+    format!("{SKILL_NAME}-skill-{SKILL_VERSION}.zip")
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "lowercase")]
 pub enum SkillStatus {
@@ -43,9 +62,86 @@ pub struct SkillInstall {
     pub files: Vec<String>,
 }
 
+#[derive(Debug, Serialize)]
+pub struct SkillExport {
+    pub ok: bool,
+    pub version: &'static str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub zip: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub dir: Option<String>,
+    pub files: Vec<String>,
+}
+
 pub fn install_skill(project: &Path) -> Result<SkillInstall> {
     let dir = project.join(SKILL_DIR);
-    let existing: Vec<Option<String>> = SKILL_FILES
+    let (status, files) = write_skill(&dir)?;
+    Ok(SkillInstall {
+        ok: true,
+        dir: dir.display().to_string(),
+        status,
+        version: SKILL_VERSION,
+        files,
+    })
+}
+
+/// Writes the zip accepted by claude.ai (the `rustabletop/` folder at its root) to `zip`
+/// and the same folder under `dir`.
+pub fn export_skill(zip: Option<&Path>, dir: Option<&Path>) -> Result<SkillExport> {
+    if let Some(path) = zip {
+        if let Some(parent) = path.parent().filter(|p| !p.as_os_str().is_empty()) {
+            fs::create_dir_all(parent)
+                .with_context(|| format!("cannot create {}", parent.display()))?;
+        }
+        fs::write(path, skill_zip()?)
+            .with_context(|| format!("cannot write {}", path.display()))?;
+    }
+    let dir = dir.map(|d| d.join(SKILL_NAME));
+    if let Some(dir) = &dir {
+        write_skill(dir)?;
+    }
+    Ok(SkillExport {
+        ok: true,
+        version: SKILL_VERSION,
+        zip: zip.map(|p| p.display().to_string()),
+        dir: dir.map(|d| d.display().to_string()),
+        files: SOURCES
+            .iter()
+            .map(|(rel, _)| format!("{SKILL_NAME}/{rel}"))
+            .collect(),
+    })
+}
+
+pub fn skill_zip() -> Result<Vec<u8>> {
+    let options = SimpleFileOptions::default()
+        .compression_method(CompressionMethod::Deflated)
+        .last_modified_time(DateTime::DEFAULT);
+    let mut writer = ZipWriter::new(Cursor::new(Vec::new()));
+    let mut folders: Vec<String> = vec![format!("{SKILL_NAME}/")];
+    for (rel, _) in SOURCES {
+        if let Some((folder, _)) = rel.rsplit_once('/') {
+            let folder = format!("{SKILL_NAME}/{folder}/");
+            if !folders.contains(&folder) {
+                folders.push(folder);
+            }
+        }
+    }
+    for folder in folders {
+        writer.add_directory(folder, options.unix_permissions(0o755))?;
+    }
+    for (rel, text) in skill_files() {
+        writer.start_file(
+            format!("{SKILL_NAME}/{rel}"),
+            options.unix_permissions(0o644),
+        )?;
+        writer.write_all(text.as_bytes())?;
+    }
+    Ok(writer.finish()?.into_inner())
+}
+
+fn write_skill(dir: &Path) -> Result<(SkillStatus, Vec<String>)> {
+    let wanted = skill_files();
+    let existing: Vec<Option<String>> = wanted
         .iter()
         .map(|(rel, _)| fs::read_to_string(dir.join(rel)).ok())
         .collect();
@@ -53,15 +149,15 @@ pub fn install_skill(project: &Path) -> Result<SkillInstall> {
         SkillStatus::Created
     } else if existing
         .iter()
-        .zip(SKILL_FILES)
-        .all(|(old, (_, text))| old.as_deref() == Some(*text))
+        .zip(&wanted)
+        .all(|(old, (_, text))| old.as_deref() == Some(text.as_str()))
     {
         SkillStatus::Unchanged
     } else {
         SkillStatus::Updated
     };
     let mut files = Vec::new();
-    for (rel, text) in SKILL_FILES {
+    for (rel, text) in &wanted {
         let path = dir.join(rel);
         if status != SkillStatus::Unchanged {
             if let Some(parent) = path.parent() {
@@ -72,13 +168,7 @@ pub fn install_skill(project: &Path) -> Result<SkillInstall> {
         }
         files.push(path.display().to_string());
     }
-    Ok(SkillInstall {
-        ok: true,
-        dir: dir.display().to_string(),
-        status,
-        version: env!("CARGO_PKG_VERSION"),
-        files,
-    })
+    Ok((status, files))
 }
 
 #[cfg(test)]
@@ -95,7 +185,7 @@ mod tests {
     }
 
     fn reference(name: &str) -> String {
-        SKILL_FILES
+        SOURCES
             .iter()
             .find(|(rel, _)| *rel == format!("reference/{name}"))
             .map(|(_, text)| (*text).to_owned())
@@ -202,5 +292,26 @@ mod tests {
         ] {
             assert!(skill.contains(&format!("reference/{name}")), "{name}");
         }
+    }
+
+    #[test]
+    fn m3_1_exit_criterion_repository_skill_carries_the_version_placeholder() {
+        let skill =
+            fs::read_to_string(repo().join("crates/rustabletop-core/skill/SKILL.md")).unwrap();
+        let install = skill
+            .split("\n## ")
+            .find(|section| section.starts_with("Install"))
+            .unwrap();
+        assert!(install.contains(&format!(
+            "rustabletop --version   # this skill is for rustabletop {SKILL_VERSION_PLACEHOLDER}"
+        )));
+        assert!(install.contains(&format!("RUSTABLETOP_VERSION=v{SKILL_VERSION_PLACEHOLDER}")));
+        assert!(!skill.contains(SKILL_VERSION));
+
+        for (rel, text) in skill_files() {
+            assert!(!text.contains("{{"), "{rel} still has a placeholder");
+        }
+        let written = &skill_files()[0].1;
+        assert!(written.contains(&format!("this skill is for rustabletop {SKILL_VERSION}")));
     }
 }

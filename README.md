@@ -1,174 +1,70 @@
 # rustabletop
 
 Agent-first framework for turning tabletop game data into printable and digital artifacts.
-Rendering is delegated to an embedded [Typst](https://typst.app); rustabletop owns schema validation,
-instance expansion, imposition and export.
+You (or an LLM agent) write data in YAML, a JSON Schema subset and [Typst](https://typst.app) face
+templates; `rustabletop` validates the data, expands instances, lays out the sheets and exports a
+print-and-play PDF plus one PNG per face. Problems come back as structured diagnostics that point at
+the data, and every command takes `--json`.
 
-**Status: pre-alpha.** The manifest and template format may still change before `v0.1.0`. Scope, decisions and milestone specs (in Italian) are in [`docs/`](docs/):
-[`Decisioni v0.1.md`](docs/Decisioni%20v0.1.md) is the entry point.
+**Status: pre-alpha.** The manifest and template format may still change before `v0.1.0`.
+
+## Install
+
+| | |
+|---|---|
+| Prebuilt, with cargo | `cargo binstall rustabletop --version 0.1.0-alpha.2` |
+| Linux x86_64, macOS arm64, Windows x86_64 (Git Bash) | `curl -fsSL https://raw.githubusercontent.com/lm98/rustabletop/main/install.sh \| sh` |
+| Windows PowerShell | `irm https://raw.githubusercontent.com/lm98/rustabletop/main/install.ps1 \| iex` |
+| From source (~8 minutes) | `cargo install rustabletop --version 0.1.0-alpha.2` |
+
+The scripts install the latest release into `~/.local/bin`; set `RUSTABLETOP_VERSION` (e.g.
+`v0.1.0-alpha.2`) for a specific one. Pre-releases need an explicit `--version` with cargo. On
+platforms without a prebuilt binary, `cargo binstall` falls back to building from source.
+
+## Install the skill
+
+The skill teaches Claude the format and the working loop. It is embedded in the binary, so it always
+matches a precise version, and it checks that version against the binary before starting.
+
+- **claude.ai:** run `rustabletop skill export` and upload the resulting
+  `rustabletop-skill-<version>.zip` in Customize > Skills. Releases ship the same file as
+  `rustabletop-skill.zip`. In a chat, Claude installs the binary by itself, at the skill's version.
+- **Claude Code:** signed in with the same account, the uploaded skill is already there. Without an
+  account, `rustabletop skill install --dir ~` writes it to `~/.claude/skills/rustabletop/`
+  (`--dir <project>` pins a copy in one project).
+
+After upgrading the binary, export and upload the skill again.
 
 ## Quick start
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/lm98/rustabletop/main/install.sh | sh   # Linux x86_64, macOS arm64, Windows x86_64 (Git Bash)
-rustabletop new my-game          # a working card + token + board project, with the Claude skill in .claude/skills/
-rustabletop check my-game        # --json on every command for agents
-rustabletop render card/eclipse my-game   # PNG of one instance, all faces
-rustabletop build my-game        # my-game/out/my-game-pnp.pdf (+ --draft for an ink-saving proof)
+rustabletop new my-game                    # a working card + token + board project
+rustabletop check my-game                  # validate manifest, schemas and data
+rustabletop render card/eclipse my-game    # PNG of one instance, one per face
+rustabletop build my-game                  # my-game/out/my-game-pnp.pdf (--draft for an ink-saving proof)
 ```
 
-Windows PowerShell: `irm https://raw.githubusercontent.com/lm98/rustabletop/main/install.ps1 | iex`.
-Other platforms: `cargo install rustabletop --version <version>` from crates.io (pre-releases need an explicit
-version, e.g. `0.1.0-alpha.2`) or `cargo install --git https://github.com/lm98/rustabletop rustabletop`; both build
-from source (~8 minutes).
-`rustabletop schema <project> --json` describes an existing project; `rustabletop skill install --dir <project>`
-adds the skill ([`crates/rustabletop-core/skill/`](crates/rustabletop-core/skill/SKILL.md)) to one. Releases also ship
-`rustabletop-skill.zip` for claude.ai.
+`rustabletop schema my-game --json` describes a project: components, shapes, print options and
+effective schemas. [`examples/sigilli`](examples/sigilli) is a larger reference project.
 
-## A project
+## Reference
 
-```
-examples/sigilli/
-├── game.yaml          manifest: icons, print settings, components (size, bleed, JSON Schema, faces, data)
-├── data/              one record per item (`id` and `qty` are built-in fields)
-├── templates/         Typst files exporting one function per face: `front(item, ctx)`, `back(item, ctx)`
-├── icons/             SVG/PNG icons used as `:name:` in `rich-text` fields
-└── fonts/             project fonts (system fonts are never used)
-```
+The skill is the user documentation, for agents and people alike:
 
-```sh
-cargo run -p rustabletop -- check examples/sigilli          # human-readable
-cargo run -p rustabletop -- check examples/sigilli --json   # for agents
-cargo run -p rustabletop -- build examples/sigilli          # out/sigilli-pnp.pdf + out/<component>/<id>-<face>.png
-```
+- [`SKILL.md`](crates/rustabletop-core/skill/SKILL.md): the working loop and the golden rules
+- [`reference/manifest.md`](crates/rustabletop-core/skill/reference/manifest.md): every key of `game.yaml` (kinds, shapes, schemas, grids, `print`)
+- [`reference/templates.md`](crates/rustabletop-core/skill/reference/templates.md): face templates, `ctx`, the `@rtt/std` library, patterns per kind
+- [`reference/diagnostics.md`](crates/rustabletop-core/skill/reference/diagnostics.md): every diagnostic code and its usual fix
+- [`reference/printing.md`](crates/rustabletop-core/skill/reference/printing.md): duplex, fold, crop marks, board sections, draft
 
-### Components
-
-A component is a shape, a set of faces and a way to produce it; `kind` sets the defaults.
-
-| kind | shapes (`size`) | faces | `print` options (default first) |
-|---|---|---|---|
-| `card` | `rect`: preset or `{width, height}`, optional `radius` | `front`, [`back`] | `duplex`, `single` + `crop-marks` |
-| `token` | `circle` (diameter), `square` (side, optional `radius`), `hex` (across flats, `orientation: pointy \| flat`) | `front`, [`back`] | `sides`: `fold`, `duplex`, `single` + `cut-lines`, `gap` |
-| `board` | `rect`: `{width, height}`, optional `radius` | `front`, [`back`] (`poster` only) | `mode`: `tiles`, `poster` + `overlap` (default 10mm) |
-
-```yaml
-- id: seal
-  kind: token
-  shape: circle
-  size: 25mm
-  bleed: 2mm
-  faces: { front: templates/seal.typ, back: templates/seal.typ }
-  data: data/seals.yaml
-  print: { sides: fold }     # fronts on the left half, mirrored backs on the right: fold, glue, cut
-```
-
-Without `back` a component prints single-sided. `data` is optional: without it the component has one
-instance whose id is the component id, with the fields given inline in `fields` (validated by `schema`,
-which is optional too).
-
-### Face templates
-
-A face is a Typst function named after the face. It draws on the shape's bounding box plus bleed on
-every side, with the origin at the bleed corner; rustabletop sets size, clipping (rectangular) and pages.
-Backgrounds should overflow the contour, as for cards.
-
-```typst
-#import "@rtt/std:0.1.0": rich, fit, safe-area, outline, art
-
-#let front(item, ctx) = {
-  rect(width: 100%, height: 100%, fill: red)
-  outline(ctx, inset: 1mm, fill: none, stroke: white)
-  safe-area(ctx, inset: 1mm)[#fit(rich(item.text), field: "text")]
-}
-```
-
-- `item`: the validated record; every declared field is present (`none` when absent). `format: asset` fields arrive as paths.
-- `ctx`: `(kind, shape: (type, orientation, width, height, radius, inscribed), trim: (width, height), bleed, component, face, item, grid, components, draft)`.
-  `ctx.components` maps every component id to its `(kind, shape, trim, bleed)`, e.g. `ctx.components.unit-card.trim`.
-- `rich(text)` replaces `:name:` with the icons declared in the manifest without changing line spacing.
-- `fit(body, max: 9pt, min: 5.5pt, field: none)` shrinks text to its container; if it does not fit at `min`,
-  `rustabletop build` reports `render.overflow` at the record (at the field, when `field` is given).
-- `safe-area(ctx, inset:)` places content in the largest rectangle inscribed in the shape, shrunk by `inset`.
-- `outline(ctx, inset:, ..args)` draws the shape's contour shrunk by `inset` (`fill`, `stroke` as for `rect`).
-- `icon-image(name, ..args)` is a declared icon as a free-standing image; `art(path, placeholder:)` shows an image or a placeholder
-  (only an outline when `ctx.draft` is true); PNG/JPEG images printed below 200 dpi produce `render.low-resolution`.
-- `draw-grid(grid, stroke:, fill:, inset:, cell:)` draws `ctx.grid`; `fill` and `cell` may be functions of `(col, row)`.
-  `cell-center(grid, col, row)` and `cells(grid)` give centres in canvas coordinates (bleed included); `cell-shape(grid, ..args)` is one cell's outline.
-
-### Boards and grids
-
-```yaml
-- id: dungeon-map
-  kind: board
-  size: { width: 500mm, height: 350mm }
-  faces: { front: templates/map.typ }
-  fields: { title: Le Cripte, spaces: [{ at: [3, 4], terrain: lava }] }
-  schema:
-    properties:
-      title: { type: string }
-      spaces: { type: array, items: { properties: { at: { format: grid-cell }, terrain: { enum: [floor, lava] } } } }
-  grid: { type: hex, cols: 14, rows: 9, cell: vortex, origin: [25mm, 40mm] }
-  print: { mode: tiles, overlap: 10mm }
-```
-
-- `grid.cell` is a length (hex: across flats; square: side) or a component id: a `hex` grid takes the size
-  and orientation of a `hex` token, a `square` grid the side of a `square` token or the diameter of a `circle`.
-  `origin` is the centre of cell `(0, 0)` from the trim corner; by default the grid is centred.
-- Cells use offset coordinates `[col, row]` from the top left: odd rows shifted for `pointy` hexes (odd-r),
-  odd columns for `flat` ones (odd-q). `format: grid-cell` values are checked against the grid (`data.grid-cell`).
-- `tiles` cuts the face into page-sized sections (A1, A2, … rows by letter) that overlap their right and lower
-  neighbours. Each section marks the strip that goes under its neighbour, the edges to trim (✂) and the
-  registration marks; an assembly page with a thumbnail comes first. `poster` prints one page of board + bleed.
-
-### Printing
-
-```yaml
-print:                 # project: the printer and its paper
-  paper: a4            # a4 | letter
-  margin: 5mm
-  duplex-edge: long    # long | short (backs flipped vertically and rotated)
-```
-
-Cards are butted at the trim with crop marks; bleed is drawn only on sides without a neighbouring card.
-Tokens are spaced by `gap` (default 2mm), bleed on every side, with a cut line on the contour
-(white under black, visible on any background).
-Duplex back sheets mirror the front sheets according to `duplex-edge`.
-
-Diagnostics point at the data, not at Typst: file, line, component / instance / field,
-plus hints (allowed values, `did you mean`). Schemas are a strict subset of JSON Schema:
-unknown keywords are rejected and records reject undeclared fields by default.
-
-## Layout
-
-```
-crates/rustabletop-core   manifest + data loading with source positions, schema validation, imposition, build (generated Typst main + virtual JSON data), Typst World (project-confined files, project fonts only, embedded `@rtt/std`), PDF/PNG export, diagnostics
-crates/rustabletop-core/typst/std   the `@rtt/std` Typst package, embedded in the binary
-crates/rustabletop-core/starter   the project written by `rustabletop new`, embedded in the binary
-crates/rustabletop    `rustabletop` binary (`new`, `schema`, `check`, `render`, `build`, `skill install`, hidden low-level `typst`)
-crates/rustabletop-core/skill   the Claude skill, embedded in the binary and written by `new` / `skill install`
-examples/sigilli  reference project
-spike/m0a         pure-Typst print-and-play spike: card.typ (faces), pnp.typ (imposition), cards.typ (one card per page)
-```
-
-## Try the spike
-
-```sh
-cargo build --release
-cd spike/m0a
-../../target/release/rustabletop typst pnp.typ --font-path fonts --out out
-../../target/release/rustabletop typst cards.typ -f png --font-path fonts --out out --input id=ash-titan
-../../target/release/rustabletop typst pnp.typ --font-path fonts --input data=cards.csv --json
-```
-
-`build.py` renders the same spike through the `typst` Python package, without Rust.
-
-Fonts in `spike/m0a/fonts` and `examples/sigilli/fonts` are Cardo and Fira Sans, under the SIL Open Font License (see the `OFL-*.txt` files).
+Design notes, decisions and milestone specs (in Italian) are in [`docs/`](docs/), starting from
+[`Decisioni v0.1.md`](docs/Decisioni%20v0.1.md).
 
 ## License
 
 Licensed under either of [Apache License, Version 2.0](LICENSE-APACHE) or [MIT license](LICENSE-MIT)
-at your option.
+at your option. The fonts in `examples/sigilli/fonts` and `spike/m0a/fonts` are Cardo and Fira Sans,
+under the SIL Open Font License (see the `OFL-*.txt` files).
 
 Unless you explicitly state otherwise, any contribution intentionally submitted for inclusion in this
 project by you, as defined in the Apache-2.0 license, shall be dual licensed as above, without any

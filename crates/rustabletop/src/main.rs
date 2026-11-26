@@ -29,7 +29,7 @@ enum Command {
     Render(RenderArgs),
     /// Check, then render the print-and-play PDF and one PNG per face
     Build(BuildArgs),
-    /// Manage the rustabletop skill for Claude Code
+    /// Export the rustabletop skill for claude.ai, or pin a copy for Claude Code
     Skill {
         #[command(subcommand)]
         command: SkillCommand,
@@ -41,8 +41,22 @@ enum Command {
 
 #[derive(Subcommand)]
 enum SkillCommand {
+    /// Write the skill as a zip to upload to claude.ai (Customize > Skills)
+    Export(SkillExportArgs),
     /// Write the skill into <DIR>/.claude/skills/rustabletop/, replacing other versions
     Install(SkillInstallArgs),
+}
+
+#[derive(clap::Args)]
+struct SkillExportArgs {
+    /// Zip file to write [default: rustabletop-skill-<version>.zip, unless --dir is given]
+    #[arg(long)]
+    zip: Option<PathBuf>,
+    /// Also write the skill folder as <DIR>/rustabletop/
+    #[arg(long)]
+    dir: Option<PathBuf>,
+    #[arg(long)]
+    json: bool,
 }
 
 #[derive(clap::Args)]
@@ -160,9 +174,10 @@ fn main() -> ExitCode {
         Command::Check(args) => check(&args),
         Command::Render(args) => render(&args),
         Command::Build(args) => build(&args),
-        Command::Skill {
-            command: SkillCommand::Install(args),
-        } => skill_install(&args),
+        Command::Skill { command } => match command {
+            SkillCommand::Export(args) => skill_export(&args),
+            SkillCommand::Install(args) => skill_install(&args),
+        },
         Command::Typst(args) => match typst(&args) {
             Ok(report) => {
                 emit(&report, args.json);
@@ -223,6 +238,44 @@ fn new(args: &NewArgs) -> ExitCode {
                     args.dir.display(),
                     files.len()
                 );
+            }
+            ExitCode::SUCCESS
+        }
+        Err(e) => {
+            if args.json {
+                let report = serde_json::json!({ "ok": false, "error": format!("{e:#}") });
+                println!(
+                    "{}",
+                    serde_json::to_string_pretty(&report).expect("report is serializable")
+                );
+            } else {
+                eprintln!("error: {e:#}");
+            }
+            ExitCode::FAILURE
+        }
+    }
+}
+
+fn skill_export(args: &SkillExportArgs) -> ExitCode {
+    let zip = match (&args.zip, &args.dir) {
+        (None, None) => Some(PathBuf::from(rustabletop_core::default_skill_zip())),
+        (zip, _) => zip.clone(),
+    };
+    match rustabletop_core::export_skill(zip.as_deref(), args.dir.as_deref()) {
+        Ok(exported) => {
+            if args.json {
+                println!(
+                    "{}",
+                    serde_json::to_string_pretty(&exported).expect("report is serializable")
+                );
+            } else {
+                for path in exported.zip.iter().chain(&exported.dir) {
+                    println!("{path}");
+                }
+                println!("ok: exported skill {}", exported.version);
+                if exported.zip.is_some() {
+                    println!("upload the zip to claude.ai: Customize > Skills");
+                }
             }
             ExitCode::SUCCESS
         }

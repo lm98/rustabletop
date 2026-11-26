@@ -16,6 +16,7 @@ function Install-Rustabletop {
     $target = 'x86_64-pc-windows-msvc'
 
     $tag = $env:RUSTABLETOP_VERSION
+    if ($tag -and -not $tag.StartsWith('v')) { $tag = "v$tag" }
     if (-not $tag) {
         try {
             $releases = Invoke-RestMethod -UseBasicParsing "https://api.github.com/repos/$repo/releases?per_page=1"

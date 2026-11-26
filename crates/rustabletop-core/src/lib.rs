@@ -26,7 +26,10 @@ pub use impose::{Cell, Page, Sheet};
 pub use project::{
     Checked, Component, DuplexEdge, Instance, MANIFEST_FILE, Paper, Print, Project, check, inspect,
 };
-pub use skill::{SKILL_DIR, SKILL_FILES, SkillInstall, SkillStatus, install_skill};
+pub use skill::{
+    SKILL_DIR, SKILL_NAME, SKILL_VERSION, SKILL_VERSION_PLACEHOLDER, SkillExport, SkillInstall,
+    SkillStatus, default_skill_zip, export_skill, install_skill, skill_files, skill_zip,
+};
 pub use starter::new_project;
 pub use units::{Length, SIZE_PRESETS, Size};
 pub use world::{ProjectWorld, STD_PACKAGE};

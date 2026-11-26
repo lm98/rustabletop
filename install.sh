@@ -27,6 +27,7 @@ case "$(uname -s)-$(uname -m)" in
 esac
 
 tag="${RUSTABLETOP_VERSION:-}"
+case "$tag" in "" | v*) ;; *) tag="v$tag" ;; esac
 if [ -z "$tag" ]; then
   tag=$(curl -fsSL "https://api.github.com/repos/$repo/releases?per_page=1" 2>/dev/null \
     | sed -n 's/.*"tag_name": *"\([^"]*\)".*/\1/p' | head -n 1) || true
