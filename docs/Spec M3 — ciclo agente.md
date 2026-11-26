@@ -164,6 +164,8 @@ Due punti mancavano nella versione originale. Il primo fa parte di M3; il second
 
 ### 12.1 Come la skill arriva all'agente (parte di M3)
 
+> **Superato da Spec M3.1** (26/11/2026): `new` non copia più la skill. La skill si carica nell'account (chat e Claude Code) e la produce il binario con `skill export`.
+
 La skill va **incorporata nel binario**, come il progetto iniziale, così la sua versione coincide sempre con quella del tool.
 
 - **`rustabletop new <dir>`** scrive la skill anche in `<dir>/.claude/skills/rustabletop/`. Claude Code carica automaticamente le skill da quella cartella, quindi ogni sessione aperta sul progetto del gioco la trova senza configurazione.
