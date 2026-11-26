@@ -3,7 +3,7 @@ resolver = "3"
 members = ["crates/rustabletop-core", "crates/rustabletop"]
 
 [workspace.package]
-version = "0.1.0-alpha.1"
+version = "0.1.0-alpha.2"
 edition = "2024"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/lm98/rustabletop"
@@ -18,4 +18,4 @@ anyhow = "1"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 clap = { version = "4", features = ["derive"] }
-rustabletop-core = { path = "crates/rustabletop-core" }
+rustabletop-core = { path = "crates/rustabletop-core", version = "0.1.0-alpha.2" }

@@ -48,7 +48,7 @@ jobs:
         with:
           path: dist
           merge-multiple: true
-      - run: cd skills && zip -r ../dist/rustabletop-skill.zip rustabletop
+      - run: mkdir -p staging && cp -r crates/rustabletop-core/skill staging/rustabletop && cd staging && zip -r ../dist/rustabletop-skill.zip rustabletop
       - run: cd dist && sha256sum * > SHA256SUMS
       - name: Publish
         env:

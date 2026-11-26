@@ -4,6 +4,10 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
+description = "Agent-first CLI that turns tabletop game data (YAML/CSV + JSON Schema + Typst templates) into print-and-play PDFs and PNGs for cards, tokens and boards"
+readme = "../../README.md"
+keywords = ["tabletop", "boardgame", "print-and-play", "typst", "cli"]
+categories = ["command-line-utilities", "game-development", "rendering"]
 
 [[bin]]
 name = "rustabletop"
