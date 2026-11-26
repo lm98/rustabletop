@@ -304,7 +304,7 @@ fn tree(root: &Path) -> Vec<(String, Vec<u8>)> {
 fn m3_exit_criterion_new_project_carries_the_repository_skill() {
     let dir = scratch("new-skill").join("game");
     new_project(&dir, Paper::A4).unwrap();
-    let repo_skill = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../skills/rustabletop");
+    let repo_skill = Path::new(env!("CARGO_MANIFEST_DIR")).join("skill");
     assert_eq!(tree(&dir.join(SKILL_DIR)), tree(&repo_skill));
 }
 

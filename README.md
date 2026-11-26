@@ -18,9 +18,11 @@ rustabletop build my-game        # my-game/out/my-game-pnp.pdf (+ --draft for an
 ```
 
 Windows PowerShell: `irm https://raw.githubusercontent.com/lm98/rustabletop/main/install.ps1 | iex`.
-Other platforms: `cargo install --git https://github.com/lm98/rustabletop rustabletop` (~8 minutes).
+Other platforms: `cargo install rustabletop --version <version>` from crates.io (pre-releases need an explicit
+version, e.g. `0.1.0-alpha.2`) or `cargo install --git https://github.com/lm98/rustabletop rustabletop`; both build
+from source (~8 minutes).
 `rustabletop schema <project> --json` describes an existing project; `rustabletop skill install --dir <project>`
-adds the skill ([`skills/rustabletop/`](skills/rustabletop/SKILL.md)) to one. Releases also ship
+adds the skill ([`crates/rustabletop-core/skill/`](crates/rustabletop-core/skill/SKILL.md)) to one. Releases also ship
 `rustabletop-skill.zip` for claude.ai.
 
 ## A project
@@ -144,7 +146,7 @@ crates/rustabletop-core   manifest + data loading with source positions, schema 
 crates/rustabletop-core/typst/std   the `@rtt/std` Typst package, embedded in the binary
 crates/rustabletop-core/starter   the project written by `rustabletop new`, embedded in the binary
 crates/rustabletop    `rustabletop` binary (`new`, `schema`, `check`, `render`, `build`, `skill install`, hidden low-level `typst`)
-skills/rustabletop    the Claude skill, embedded in the binary and written by `new` / `skill install`
+crates/rustabletop-core/skill   the Claude skill, embedded in the binary and written by `new` / `skill install`
 examples/sigilli  reference project
 spike/m0a         pure-Typst print-and-play spike: card.typ (faces), pnp.typ (imposition), cards.typ (one card per page)
 ```

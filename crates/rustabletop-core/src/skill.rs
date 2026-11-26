@@ -7,25 +7,22 @@ use serde::Serialize;
 pub const SKILL_DIR: &str = ".claude/skills/rustabletop";
 
 pub const SKILL_FILES: &[(&str, &str)] = &[
-    (
-        "SKILL.md",
-        include_str!("../../../skills/rustabletop/SKILL.md"),
-    ),
+    ("SKILL.md", include_str!("../skill/SKILL.md")),
     (
         "reference/manifest.md",
-        include_str!("../../../skills/rustabletop/reference/manifest.md"),
+        include_str!("../skill/reference/manifest.md"),
     ),
     (
         "reference/templates.md",
-        include_str!("../../../skills/rustabletop/reference/templates.md"),
+        include_str!("../skill/reference/templates.md"),
     ),
     (
         "reference/diagnostics.md",
-        include_str!("../../../skills/rustabletop/reference/diagnostics.md"),
+        include_str!("../skill/reference/diagnostics.md"),
     ),
     (
         "reference/printing.md",
-        include_str!("../../../skills/rustabletop/reference/printing.md"),
+        include_str!("../skill/reference/printing.md"),
     ),
 ];
 
@@ -193,7 +190,8 @@ mod tests {
 
     #[test]
     fn skill_entry_point_is_short_and_links_every_reference() {
-        let skill = fs::read_to_string(repo().join("skills/rustabletop/SKILL.md")).unwrap();
+        let skill =
+            fs::read_to_string(repo().join("crates/rustabletop-core/skill/SKILL.md")).unwrap();
         assert!(skill.lines().count() <= 150);
         assert!(skill.starts_with("---\nname: rustabletop\ndescription: "));
         for name in [

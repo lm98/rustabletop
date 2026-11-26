@@ -4,6 +4,10 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
+description = "Core of rustabletop: validates tabletop game data against JSON Schema and renders cards, tokens and boards to print-and-play PDF and PNG through embedded Typst"
+readme = "../../README.md"
+keywords = ["tabletop", "boardgame", "print-and-play", "typst", "prototyping"]
+categories = ["game-development", "rendering"]
 
 [dependencies]
 typst.workspace = true

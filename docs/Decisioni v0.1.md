@@ -62,13 +62,15 @@ Il valore non sta nel "dati → carte → PDF", già coperto da nanDECK, Squib, 
 
 ### 3.6 Integrazione agente
 - **Prima la CLI, poi MCP.** Comandi con `--json`: `schema`, `check`, `build`, `render` (anteprima PNG di una singola istanza).
-- Una **skill Claude** nel repo (`skills/rustabletop/SKILL.md`) descrive formato, stdlib e ciclo di lavoro per **tutti e tre i kind**. Funziona in Claude Code e in qualsiasi sessione con una shell.
+- Una **skill Claude** nel repo (`crates/rustabletop-core/skill/SKILL.md`, in `skills/rustabletop/` fino alla v0.1.0-alpha.1) descrive formato, stdlib e ciclo di lavoro per **tutti e tre i kind**. Funziona in Claude Code e in qualsiasi sessione con una shell.
 - Il server MCP sarà un adapter sottile sopra `rustabletop-core`, dopo la v0.1.
 
 ### 3.7 Pubblicazione *(25/11/2026)*
 - Repo pubblico (`lm98/rustabletop`). Licenza **MIT OR Apache-2.0**, come da convenzione dell'ecosistema Rust e compatibile con Typst (Apache-2.0); file `LICENSE-MIT` e `LICENSE-APACHE` nella root.
 - I font nei progetti di esempio sono OFL, con il loro file di licenza accanto.
 - Stato dichiarato nel README: pre-alpha, formato non stabile fino a `v0.1.0`.
+- **crates.io** *(26/11/2026)*: si pubblicano `rustabletop-core` (libreria) e `rustabletop` (CLI), con la stessa versione del workspace e del tag git. Tutto ciò che il binario incorpora (libreria Typst, progetto iniziale, skill) deve stare dentro la cartella del crate. Le pre-release richiedono `cargo install rustabletop --version <v>`.
+- **Processo di rilascio:** (1) aggiornare `version` del workspace e la versione della dipendenza `rustabletop-core` in `Cargo.toml`; (2) `cargo publish --workspace --dry-run`; (3) merge su `main`; (4) tag `v<version>`, da cui il workflow pubblica binari e zip della skill; (5) `cargo publish --workspace`, nell'ordine core → CLI, che cargo gestisce da solo.
 - **Nome:** il binario si chiama `rustabletop`, come repo e crate (prima era `rtt`, che collideva con il Real-Time Transfer dell'ecosistema embedded). Crate: `rustabletop-core` (lib) e `rustabletop` (CLI). Per un tool agent-first la lunghezza non pesa: conta che il nome sia univoco. Il namespace del pacchetto Typst resta `@rtt/std`, perché è virtuale e servito solo dal nostro `World`, quindi non collide con niente.
 
 ## 4. Fuori scope v0.1 (con condizione per riconsiderare)
@@ -141,7 +143,7 @@ Backlog dopo v0.1: watch mode, MCP, forme da SVG, disposizione a nido d'ape degl
 - Bozza: `@rtt/std` importa un file virtuale `mode.typ` (`#let draft = …`) servito dal `World`, così `art()` conosce la modalità senza ricevere `ctx`. In bozza `art` non emette metadati, quindi niente `render.low-resolution`.
 - `render.low-resolution`: dpi effettivi secondo `fit` (`cover`/`stretch`: asse peggiore; `contain`: asse che riempie il riquadro). Le dimensioni in pixel si leggono con `imagesize`, già presente nel grafo delle dipendenze di Typst. Il campo si ricava confrontando il percorso con i campi `asset` del record.
 - Il suggerimento di `render.overflow` ora invita ad accorciare il testo prima di abbassare `min`, come la regola d'oro della skill.
-- Skill: incorporata nel binario con `include_str!` da `skills/rustabletop/`, scritta da `new` e da `skill install` (stato `created`/`unchanged`/`updated` nel report). I test di coerenza ricavano le chiavi del manifest dai messaggi `unknown field` di serde e i codici dalle chiamate a `Diagnostic::error/warning`.
+- Skill: incorporata nel binario con `include_str!` da `skills/rustabletop/` (dalla v0.1.0-alpha.2 in `crates/rustabletop-core/skill/`, perché un crate pubblicato contiene solo i file della propria cartella), scritta da `new` e da `skill install` (stato `created`/`unchanged`/`updated` nel report). I test di coerenza ricavano le chiavi del manifest dai messaggi `unknown field` di serde e i codici dalle chiamate a `Diagnostic::error/warning`.
 - Release: Linux compilato su `ubuntu-22.04` (glibc 2.35, compatibile con le distribuzioni recenti), macOS arm64 su `macos-latest`, Windows x86_64 (MSVC) su `windows-latest` come zip; `install.sh` copre Windows da Git Bash/MSYS (serve `unzip`), `install.ps1` da PowerShell (`irm …/install.ps1 | iex`; aggiunge `~\.local\bin` al PATH utente, disattivabile con `RUSTABLETOP_NO_MODIFY_PATH`). I tag con `-` sono prerelease; `install.sh` installa l'ultima release, prerelease comprese (oppure `RUSTABLETOP_VERSION`).
 - Versione del workspace portata a `0.1.0-alpha.1`, la prima release prevista da §8.
 - Correzioni dalla valutazione: i `tiles` dividono la plancia in **sezioni uguali** (prima l'ultima poteva essere una striscia di pochi mm: 360×250 su A4 dava 186 + 186 + 4 mm); i PNG in bozza finiscono in `-draft.png` invece di sovrascrivere quelli definitivi; la plancia del progetto iniziale passa a 350×250 (2 sezioni); skill precisata su `render`, icone, token circolari, `cell-shape`, sezioni.
