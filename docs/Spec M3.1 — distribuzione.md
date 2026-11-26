@@ -71,13 +71,13 @@ rustabletop --version   # this skill is for rustabletop {{RUSTABLETOP_VERSION}}
 - Le sezioni di riferimento oggi presenti nel README (kind, `ctx`, libreria, griglie, stampa) si spostano in `crates/rustabletop-core/skill/reference/`, unendole a quanto c'è già, senza duplicati. Il README linka quei file.
 - Ruoli dei documenti: `docs/` è il design (italiano); la skill è il riferimento utente (inglese); il README è l'ingresso.
 
-## 6. Ripiego PyPI (condizionale)
+## 6. Ripiego PyPI: non serve (nel backlog)
 
-**Si attiva solo se il test di `install.sh` nella chat di claude.ai fallisce** perché la sandbox non raggiunge gli asset delle release di GitHub.
+**Test del 26/11/2026** in una chat nuova di claude.ai, con l'esecuzione del codice attiva. `install.sh` con `RUSTABLETOP_VERSION=v0.1.0-alpha.1` scarica script e binario da `raw.githubusercontent.com` e dalle release di GitHub (il traffico passa da un proxy con una sua CA, senza problemi). Il binario gira nella sandbox: `rustabletop new` e `build` terminano con `0 warning(s)`.
 
-- Wheel con il binario, costruito con `maturin` in modalità `bin`, pubblicato su PyPI dal workflow di release con lo stesso numero di versione (in formato PEP 440: `0.1.0a2`).
-- Nella skill, il ramo "comando non trovato" prova prima `pip install rustabletop==<versione PEP 440>`, poi `install.sh`.
-- Se il test passa, questa sezione resta nel backlog.
+- **Requisito da documentare** (README e sezione Install della skill): in chat serve l'esecuzione di codice con accesso di rete che includa GitHub. L'impostazione "Package managers only" include `github.com`; con "None" bisogna aggiungere i domini di GitHub tra quelli ammessi.
+- Se la skill trova un errore di rete durante l'installazione, deve dirlo all'utente indicando questa impostazione, invece di tentare altre strade.
+- Il wheel PyPI (`maturin`, modalità `bin`) va nel backlog: si riconsidera se utenti con reti più restrittive lo chiedono.
 
 ## 7. Criteri di uscita
 
