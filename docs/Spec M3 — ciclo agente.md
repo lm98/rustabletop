@@ -176,6 +176,8 @@ La skill va **incorporata nel binario**, come il progetto iniziale, così la sua
 
 ### 12.2 Una sola documentazione utente (dopo M3)
 
+> **Chiuso in M3.1** (26/11/2026, Spec M3.1 §5): il README è l'ingresso e linka `crates/rustabletop-core/skill/reference/`.
+
 - I file `skills/rustabletop/reference/*.md` diventano **l'unica documentazione utente** (in inglese).
 - Il README si riduce a presentazione, installazione, avvio rapido (`install.sh` → `rustabletop new` → `build`) e link a `skills/rustabletop/reference/`. Le sezioni di riferimento oggi presenti nel README (kind, `ctx`, libreria, griglie, stampa) si spostano lì, senza duplicati.
 - Ruoli dei documenti: `docs/` è il design (italiano, per chi sviluppa); `skills/rustabletop/` è il riferimento utente (inglese, per agenti e persone); il README è l'ingresso.

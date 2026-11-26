@@ -2,8 +2,9 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use rustabletop_core::{
-    BuildOptions, Built, Diagnostic, Paper, RenderOptions, SKILL_DIR, Severity, SkillStatus, build,
-    check, describe, install_skill, new_project, render,
+    BuildOptions, Built, Diagnostic, Paper, RenderOptions, SKILL_DIR, SKILL_NAME, SKILL_VERSION,
+    SKILL_VERSION_PLACEHOLDER, Severity, SkillStatus, build, check, describe, export_skill,
+    install_skill, new_project, render,
 };
 
 fn example() -> PathBuf {
@@ -301,11 +302,90 @@ fn tree(root: &Path) -> Vec<(String, Vec<u8>)> {
 }
 
 #[test]
-fn m3_exit_criterion_new_project_carries_the_repository_skill() {
-    let dir = scratch("new-skill").join("game");
-    new_project(&dir, Paper::A4).unwrap();
-    let repo_skill = Path::new(env!("CARGO_MANIFEST_DIR")).join("skill");
-    assert_eq!(tree(&dir.join(SKILL_DIR)), tree(&repo_skill));
+fn m3_1_exit_criterion_new_project_has_no_skill() {
+    let dir = scratch("new-no-skill").join("game");
+    let files = new_project(&dir, Paper::A4).unwrap();
+    assert!(!dir.join(".claude").exists());
+    assert!(files.iter().all(|f| !f.contains(".claude")), "{files:?}");
+}
+
+#[test]
+fn m3_1_exit_criterion_skill_install_writes_the_exported_tree() {
+    let dir = scratch("skill-install-export");
+    install_skill(&dir.join("project")).unwrap();
+    let exported = export_skill(None, Some(&dir.join("exported"))).unwrap();
+    assert_eq!(exported.zip, None);
+
+    let installed = tree(&dir.join("project").join(SKILL_DIR));
+    assert_eq!(installed, tree(&dir.join("exported").join(SKILL_NAME)));
+    let repo_names: Vec<String> = tree(&repo_skill())
+        .into_iter()
+        .map(|(rel, _)| rel)
+        .collect();
+    let names: Vec<String> = installed.iter().map(|(rel, _)| rel.clone()).collect();
+    assert_eq!(names, repo_names);
+    for (rel, bytes) in &installed {
+        let text = String::from_utf8(bytes.clone()).unwrap();
+        assert!(!text.contains(SKILL_VERSION_PLACEHOLDER), "{rel}");
+    }
+}
+
+#[test]
+fn m3_1_exit_criterion_skill_zip_holds_the_versioned_skill_folder() {
+    let dir = scratch("skill-zip");
+    let path = dir.join("nested").join("skill.zip");
+    let exported = export_skill(Some(&path), None).unwrap();
+    assert_eq!(exported.dir, None);
+    assert_eq!(exported.version, SKILL_VERSION);
+
+    let bytes = fs::read(&path).unwrap();
+    let mut archive = zip::ZipArchive::new(std::io::Cursor::new(bytes.clone())).unwrap();
+    let mut entries = Vec::new();
+    for index in 0..archive.len() {
+        let mut entry = archive.by_index(index).unwrap();
+        if entry.is_dir() {
+            continue;
+        }
+        let mut text = String::new();
+        std::io::Read::read_to_string(&mut entry, &mut text).unwrap();
+        let name = entry.name().unwrap().into_owned();
+        entries.push((name, text));
+    }
+    entries.sort();
+
+    let mut expected: Vec<String> = tree(&repo_skill())
+        .into_iter()
+        .map(|(rel, _)| format!("{SKILL_NAME}/{}", rel.replace('\\', "/")))
+        .collect();
+    expected.sort();
+    let names: Vec<&str> = entries.iter().map(|(name, _)| name.as_str()).collect();
+    assert_eq!(names, expected);
+    assert!(names.contains(&"rustabletop/SKILL.md"));
+    assert!(
+        names
+            .iter()
+            .filter(|n| n.starts_with("rustabletop/reference/"))
+            .count()
+            >= 4
+    );
+    assert_eq!(exported.files.len(), names.len());
+
+    for (name, text) in &entries {
+        assert!(!text.contains(SKILL_VERSION_PLACEHOLDER), "{name}");
+    }
+    let skill = &entries
+        .iter()
+        .find(|(n, _)| n == "rustabletop/SKILL.md")
+        .unwrap()
+        .1;
+    assert!(skill.contains(&format!("this skill is for rustabletop {SKILL_VERSION}")));
+    assert!(skill.contains(&format!("RUSTABLETOP_VERSION=v{SKILL_VERSION}")));
+
+    assert_eq!(bytes, rustabletop_core::skill_zip().unwrap());
+}
+
+fn repo_skill() -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("skill")
 }
 
 #[test]

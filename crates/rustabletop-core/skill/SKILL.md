@@ -13,15 +13,25 @@ reports problems as structured diagnostics pointing at your data.
 ## Install
 
 ```sh
-rustabletop --version || curl -fsSL https://raw.githubusercontent.com/lm98/rustabletop/main/install.sh | sh
+rustabletop --version   # this skill is for rustabletop {{RUSTABLETOP_VERSION}}
 ```
 
-On Windows (PowerShell): `irm https://raw.githubusercontent.com/lm98/rustabletop/main/install.ps1 | iex`.
-Both put `rustabletop` in `~/.local/bin` (make sure it is on `PATH`). Fallback when no
-release fits the platform, ~8 minutes: `cargo install --git https://github.com/lm98/rustabletop rustabletop`.
+- **Same version:** go on, say nothing.
+- **Command not found** (usual in a chat sandbox): install exactly this version, then put it on `PATH`:
 
-`rustabletop new` also writes this skill into `<dir>/.claude/skills/rustabletop/`, matching the
-binary's version; `rustabletop skill install --dir <project>` does the same for an existing project.
+  ```sh
+  curl -fsSL https://raw.githubusercontent.com/lm98/rustabletop/main/install.sh | RUSTABLETOP_VERSION=v{{RUSTABLETOP_VERSION}} sh
+  export PATH="$HOME/.local/bin:$PATH"
+  ```
+
+  Fallback when `cargo` is available: `cargo binstall rustabletop --version {{RUSTABLETOP_VERSION}}`
+  (or `cargo install rustabletop --version {{RUSTABLETOP_VERSION}}`, which builds for ~8 minutes).
+  Windows PowerShell: `$env:RUSTABLETOP_VERSION = 'v{{RUSTABLETOP_VERSION}}'`, then
+  `irm https://raw.githubusercontent.com/lm98/rustabletop/main/install.ps1 | iex`.
+- **Different version:** tell the user **once** that skill and binary differ, with the two fixes:
+  refresh the skill (`rustabletop skill export --zip`, then upload the zip again in claude.ai
+  Customize > Skills) or install the binary of this skill's version as above. Then go on, and
+  trust the binary over this skill: `rustabletop schema --json` and the diagnostics are authoritative.
 
 ## Workflow
 

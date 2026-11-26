@@ -3,6 +3,20 @@
 Every key the manifest accepts. Unknown keys are errors (`manifest.invalid`). Lengths are
 strings with a unit: `mm`, `cm`, `in`, `pt` (`"2.5in"`, `63mm`).
 
+## Project layout
+
+```
+my-game/
+├── game.yaml          the manifest: icons, print settings, components
+├── data/              one record per item (`id` and `qty` are built-in fields)
+├── templates/         Typst files exporting one function per face: `front(item, ctx)`, `back(item, ctx)`
+├── icons/             SVG/PNG icons used as `:name:` in `rich-text` fields
+├── fonts/             optional project fonts (system fonts are never used)
+└── out/               written by `rustabletop build` and `rustabletop render`
+```
+
+Paths in the manifest are relative to the project root; files outside it cannot be read.
+
 ## Top level
 
 ```yaml
@@ -126,6 +140,26 @@ grid: { type: hex, cols: 9, rows: 7, cell: marker, orientation: pointy, origin: 
 | `cell` | A length (hex: across flats; square: side) **or a component id**: a `hex` grid takes size and orientation from a `hex` token, a `square` grid from a `square` token's side or a `circle` token's diameter. Prefer the id: cells then always match the tokens. |
 | `orientation` | `hex` only; inherited from the token when `cell` is an id. |
 | `origin` | Centre of cell `[0, 0]` measured from the top-left corner of the trim. Default: the grid is centred on the board. |
+
+Cells are stored in the data as `format: grid-cell` fields, at any depth of the schema:
+
+```yaml
+- id: dungeon-map
+  kind: board
+  size: { width: 500mm, height: 350mm }
+  faces: { front: templates/map.typ }
+  fields: { title: The Crypts, spaces: [{ at: [3, 4], terrain: lava }] }
+  schema:
+    properties:
+      title: { type: string }
+      spaces:
+        type: array
+        items: { properties: { at: { format: grid-cell }, terrain: { enum: [floor, lava] } } }
+  grid: { type: hex, cols: 14, rows: 9, cell: vortex, origin: [25mm, 40mm] }   # `vortex`: a hex token
+  print: { mode: tiles, overlap: 10mm }
+```
+
+A wrong cell is reported at its path in the record (`spaces.0.at`).
 
 The grid must fit inside the board (`manifest.grid`). Pointy hex: the grid is
 `cols × cell + cell/2` wide and `(rows − 1) × cell × 0.866 + cell × 1.155` tall.

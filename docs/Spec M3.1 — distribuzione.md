@@ -1,6 +1,6 @@
 # rustabletop — Spec M3.1: distribuzione di binario e skill
 
-**Stato:** approvata (26/11/2026), implementazione da avviare. Base: `main` **con la PR #10 unita** (skill in `crates/rustabletop-core/skill/`, metadati crates.io, versione `0.1.0-alpha.2`).
+**Stato:** implementata (26/11/2026) con i test automatici di §1–§4; verifiche manuali di §7 in sospeso fino alla pubblicazione di `0.1.0-alpha.2` (`docs/evals/m3.1/`). §6 non attivata. Base: `main` **con la PR #10 unita** (skill in `crates/rustabletop-core/skill/`, metadati crates.io, versione `0.1.0-alpha.2`).
 **Rilascio:** M3.1 e PR #10 escono insieme come **`0.1.0-alpha.2`**: tag, binari, zip della skill e pubblicazione su crates.io avvengono dopo il merge di M3.1, non prima.
 **Contesto:** sostituisce Spec M3 §12.1 per la parte "`new` copia la skill nel progetto" e chiude §12.2.
 

@@ -59,7 +59,6 @@ pub fn new_project(dir: &Path, paper: Paper) -> Result<Vec<String>> {
         fs::write(&path, text).with_context(|| format!("cannot write {}", path.display()))?;
         written.push(path.display().to_string());
     }
-    written.extend(crate::skill::install_skill(dir)?.files);
     Ok(written)
 }
 
